@@ -1,33 +1,27 @@
+from typing import Optional, Tuple, Union
+
 import numpy as np
+from sklearn.utils import check_random_state
 
 
-def mask_generator(p_m, x):
-    """Generates mask vector.
-
-    Args:
-      p_m: Corruption probability.
-      x: Feature matrix.
-
-    Returns:
-      mask: Binary mask matrix.
-    """
-    mask = np.random.binomial(n=1, p=p_m, size=x.shape)
+def mask_generator(
+    X: np.ndarray,
+    p_masking: float,
+    random_state: Optional[Union[int, np.random.RandomState]] = None,
+) -> np.ndarray:
+    random_state = check_random_state(random_state)
+    mask = random_state.binomial(n=1, p=p_masking, size=X.shape)
     return mask
 
 
-def pretext_generator(mask, x):
-    """Generates corrupted samples.
-
-    Args:
-      mask: Mask matrix.
-      x: Feature matrix.
-
-    Returns:
-      mask_new: Final mask matrix after corruption.
-      x_tilde: Corrupted feature matrix.
-    """
-    x_bar = x.copy()
-    np.apply_along_axis(func1d=np.random.shuffle, axis=0, arr=x_bar)
-    x_tilde = x * (1 - mask) + x_bar * mask     # Corrupt samples
-    mask_new = (x != x_tilde).astype(np.float32)  # Define new mask matrix
-    return mask_new, x_tilde
+def pretext_generator(
+    X: np.ndarray,
+    mask: np.ndarray,
+    random_state: Optional[Union[int, np.random.RandomState]] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    random_state = check_random_state(random_state)
+    X_bar = X.copy()
+    np.apply_along_axis(func1d=random_state.shuffle, axis=0, arr=X_bar)
+    X_tilde = X * (1 - mask) + X_bar * mask  # Corrupts samples(X)
+    corruption_mask = (X != X_tilde).astype(np.float32)
+    return X_tilde, corruption_mask
