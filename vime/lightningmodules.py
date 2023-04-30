@@ -28,8 +28,8 @@ class VIMESelf(pl.LightningModule):
         self.random_state = check_random_state(seed)
         self.feature_criterion = nn.MSELoss()
         self.mask_criterion = nn.BCEWithLogitsLoss()
-        self.training_step_outputs = []
-        self.validation_step_outputs = []
+        self.training_step_outputs: List[Tensor] = []
+        self.validation_step_outputs: List[Tensor] = []
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
@@ -103,8 +103,8 @@ class VIMESemi(pl.LightningModule):
         self.random_state = check_random_state(seed)
         self.supervised_criterion = nn.BCEWithLogitsLoss()
         self.consistency_criterion = consistency_criterion
-        self.training_step_outputs = []
-        self.validation_step_outputs = []
+        self.training_step_outputs: List[Tensor] = []
+        self.validation_step_outputs: List[Tensor] = []
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)

@@ -3,6 +3,6 @@ line-length = 120
 target-version = ["py38"]
 
 [tool.mypy]
-files = ["textmentations"]
+files = ["vime"]
 ignore_missing_imports = true
 python_version = 3.8
