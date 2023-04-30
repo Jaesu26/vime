@@ -12,7 +12,7 @@ class VIMESelfDataModule(pl.LightningDataModule):
         self,
         X: np.ndarray,
         train_size: float = 0.9,
-        batch_size: int = 128,
+        batch_size: int = 512,
         seed: int = 1234,
     ):
         super().__init__()
@@ -41,8 +41,8 @@ class VIMESemiDataModule(pl.LightningDataModule):
         y: np.ndarray,
         X_predict: np.ndarray,
         train_size: float = 0.9,
-        labeled_batch_size: int = 128,
-        unlabeled_batch_size: int = 256,
+        labeled_batch_size: int = 256,
+        unlabeled_batch_size: int = 512,
         seed: int = 1234,
     ):
         super().__init__()
