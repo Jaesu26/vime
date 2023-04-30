@@ -86,5 +86,5 @@ class Predictor(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.model(x)
-        x = self.classifier(x)
-        return x
+        y_hat = self.classifier(x)
+        return y_hat
