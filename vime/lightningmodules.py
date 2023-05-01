@@ -73,7 +73,7 @@ class VIMESelf(pl.LightningModule):
         output = self._shared_step(batch, batch_idx)
         self.validation_step_outputs.append(output)
 
-    def validation_epoch_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         mean_loss = torch.stack([output["loss"] for output in self.validation_step_outputs]).mean()
         mean_loss_m = torch.stack([output["l_m"] for output in self.validation_step_outputs]).mean()
         mean_loss_r = torch.stack([output["l_r"] for output in self.validation_step_outputs]).mean()
@@ -181,7 +181,7 @@ class VIMESemi(pl.LightningModule):
         output = {"loss_s": supervised_loss}
         self.validation_step_outputs.append(output)
 
-    def validation_epoch_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         mean_loss_s = torch.stack([output["loss_s"] for output in self.validation_step_outputs]).mean()
         self.validation_step_outputs.clear()
         self.log_dict({"val_loss": mean_loss_s})
