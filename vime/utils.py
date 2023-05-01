@@ -22,6 +22,6 @@ def pretext_generator(
     random_state = check_random_state(random_state)
     X_bar = X.copy()
     np.apply_along_axis(func1d=random_state.shuffle, axis=0, arr=X_bar)
-    X_tilde = X * (1 - mask) + X_bar * mask  # Corrupts samples(X)
+    X_tilde = X * (1 - mask) + X_bar * mask  # Corrupts samples(=X)
     corruption_mask = (X != X_tilde).astype(np.float32)
     return X_tilde, corruption_mask
