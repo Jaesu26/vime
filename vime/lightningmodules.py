@@ -21,7 +21,7 @@ class VIMESelf(pl.LightningModule):
         p_masking: float = 0.3,
         alpha: float = 2.0,
         log_interval: int = 10,
-        seed: int = 1234,
+        seed: int = 26,
     ) -> None:
         super().__init__()
         pl.seed_everything(seed)
@@ -88,7 +88,7 @@ class VIMESelf(pl.LightningModule):
         return [optimizer], [scheduler]
 
     @property
-    def encoder(self):
+    def encoder(self) -> nn.Module:
         return self.model.encoder
 
 
@@ -102,10 +102,10 @@ class VIMESemi(pl.LightningModule):
         task_type: Literal["regression", "binary", "multiclass"],
         learning_rate: float = 5e-3,
         p_masking: float = 0.3,
-        k: int = 3,
+        K: int = 3,
         beta: float = 1.0,
         log_interval: int = 10,
-        seed: int = 1234,
+        seed: int = 26,
     ) -> None:
         super().__init__()
         pl.seed_everything(seed)
@@ -133,7 +133,7 @@ class VIMESemi(pl.LightningModule):
             batch["labeled"] = torch.FloatTensor(X_labeled), torch.FloatTensor(y)
             X_unlabeled = batch["unlabeled"]
             X_augmented = []
-            for _ in self.hparams.k:
+            for _ in self.hparams.K:
                 mask = mask_generator(self.hparams.p_masking, X_unlabeled.shape, self.random_state)
                 X_tilde, _ = pretext_generator(X_unlabeled, mask, self.random_state)
                 X_tilde = torch.FloatTensor(X_tilde)

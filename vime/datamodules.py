@@ -13,8 +13,8 @@ class VIMESelfDataModule(pl.LightningDataModule):
         X: np.ndarray,
         train_size: float = 0.9,
         batch_size: int = 512,
-        seed: int = 1234,
-    ):
+        seed: int = 26,
+    ) -> None:
         super().__init__()
         self.save_hyperparameters()
         self.X = X
@@ -43,8 +43,8 @@ class VIMESemiDataModule(pl.LightningDataModule):
         train_size: float = 0.9,
         labeled_batch_size: int = 256,
         unlabeled_batch_size: int = 512,
-        seed: int = 1234,
-    ):
+        seed: int = 26,
+    ) -> None:
         super().__init__()
         self.save_hyperparameters()
         self.X_unlabeled = X_unlabeled
@@ -58,7 +58,7 @@ class VIMESemiDataModule(pl.LightningDataModule):
 
     def setup(self, stage: str) -> None:
         X_train, X_val, y_train, y_val = train_test_split(
-            self.X_labeled, self.y, train_size=self.hparams.train_size, random_state=self.hparams.seed, stratify=True
+            self.X_labeled, self.y, train_size=self.hparams.train_size, random_state=self.hparams.seed, stratify=self.y
         )
         self.train_unlabeled_dataset = UnlabeledDataset(self.X_unlabeled)
         self.train_labeled_dataset = LabeledDataset(X_train, y_train)
