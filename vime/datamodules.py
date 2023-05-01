@@ -51,26 +51,26 @@ class VIMESemiDataModule(pl.LightningDataModule):
         self.X_labeled = X_labeled
         self.y = y
         self.X_predict = X_predict
-        self.unlabeled_train_dataset = None
-        self.labeled_train_dataset = None
-        self.labeled_val_dataset = None
+        self.train_unlabeled_dataset = None
+        self.train_labeled_dataset = None
+        self.val_labeled_dataset = None
         self.predict_dataset = None
 
     def setup(self, stage: str) -> None:
         X_train, X_val, y_train, y_val = train_test_split(
             self.X_labeled, self.y, train_size=self.hparams.train_size, random_state=self.hparams.seed, stratify=True
         )
-        self.unlabeled_train_dataset = UnlabeledDataset(self.X_unlabeled)
-        self.labeled_train_dataset = LabeledDataset(X_train, y_train)
-        self.labeled_val_dataset = LabeledDataset(X_val, y_val)
+        self.train_unlabeled_dataset = UnlabeledDataset(self.X_unlabeled)
+        self.train_labeled_dataset = LabeledDataset(X_train, y_train)
+        self.val_labeled_dataset = LabeledDataset(X_val, y_val)
         self.predict_dataset = UnlabeledDataset(self.X_predict)
 
     def train_dataloader(self) -> CombinedLoader:
         labeled_dataloader = DataLoader(
-            self.labeled_train_dataset, batch_size=self.hparams.labeled_batch_size, shuffle=True
+            self.train_labeled_dataset, batch_size=self.hparams.labeled_batch_size, shuffle=True
         )
         unlabeled_dataloader = DataLoader(
-            self.unlabeled_train_dataset, batch_size=self.hparams.unlabeled_batch_size, shuffle=True
+            self.train_unlabeled_dataset, batch_size=self.hparams.unlabeled_batch_size, shuffle=True
         )
         dataloaders = {"labeled": labeled_dataloader, "unlabeled": unlabeled_dataloader}
         if len(labeled_dataloader) >= len(unlabeled_dataloader):
@@ -80,7 +80,7 @@ class VIMESemiDataModule(pl.LightningDataModule):
         return combined_loader
 
     def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.labeled_val_dataset, batch_size=self.hparams.labeled_batch_size, shuffle=False)
+        return DataLoader(self.val_labeled_dataset, batch_size=self.hparams.labeled_batch_size, shuffle=False)
 
     def predict_dataloader(self) -> DataLoader:
         return DataLoader(self.predict_dataset, batch_size=self.hparams.unlabeled_batch_size, shuffle=False)
