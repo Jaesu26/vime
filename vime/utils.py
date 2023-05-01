@@ -5,12 +5,12 @@ from sklearn.utils import check_random_state
 
 
 def mask_generator(
-    X: np.ndarray,
     p_masking: float,
+    size: Tuple[int, ...],
     random_state: Optional[Union[int, np.random.RandomState]] = None,
 ) -> np.ndarray:
     random_state = check_random_state(random_state)
-    mask = random_state.binomial(n=1, p=p_masking, size=X.shape)
+    mask = random_state.binomial(n=1, p=p_masking, size=size)
     return mask
 
 

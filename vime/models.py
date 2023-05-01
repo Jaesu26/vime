@@ -21,18 +21,7 @@ class VIMESelfModule(nn.Module):
 
     @property
     def encoder(self) -> nn.Module:
-        self.freeze_encoder()
         return self._encoder
-
-    def freeze_encoder(self) -> None:
-        for param in self._encoder.parameters():
-            param.requires_grad = False
-        self._encoder.eval()
-
-    def unfreeze_encoder(self) -> None:
-        for param in self._encoder.parameters():
-            param.requires_grad = True
-        self._encoder.train()
 
 
 class Encoder(nn.Module):
@@ -59,18 +48,27 @@ def get_block(in_features: int, out_features: int) -> nn.Sequential:
 
 
 class VIMESemiModule(nn.Module):
-    def __init__(self, encoder: nn.Module, predictor: nn.Module) -> None:
+    def __init__(
+        self,
+        pretrained_encoder: nn.Module,
+        in_features_list: List[int],
+        out_features_list: List[int],
+        num_classes: int,
+    ) -> None:
         super().__init__()
-        encoder.eval()
-        for param in encoder.parameters():
-            param.requires_grad = False
-        self.encoder = encoder
-        self.predictor = predictor
+        self.encoder = pretrained_encoder
+        self.predictor = Predictor(in_features_list, out_features_list, num_classes)
+        self.freeze_encoder()
 
     def forward(self, x: Tensor) -> Tensor:
         z = self.encoder(x)
         y_hat = self.predictor(z)
         return y_hat
+
+    def freeze_encoder(self) -> None:
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        self.encoder.eval()
 
 
 class Predictor(nn.Module):
@@ -84,7 +82,7 @@ class Predictor(nn.Module):
         )
         self.classifier = nn.Linear(out_features_list[-1], num_classes)
 
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.model(x)
-        y_hat = self.classifier(x)
+    def forward(self, z: Tensor) -> Tensor:
+        z = self.model(z)
+        y_hat = self.classifier(z)
         return y_hat

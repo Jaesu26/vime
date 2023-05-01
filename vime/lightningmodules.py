@@ -1,13 +1,14 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Literal, Tuple
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.utils import check_random_state
 from torch import Tensor
 
-from .models import Predictor, VIMESelfModule, VIMESemiModule
+from .models import VIMESelfModule, VIMESemiModule
 from .utils import mask_generator, pretext_generator
 
 
@@ -23,6 +24,7 @@ class VIMESelf(pl.LightningModule):
         seed: int = 1234,
     ) -> None:
         super().__init__()
+        pl.seed_everything(seed)
         self.save_hyperparameters()
         self.model = VIMESelfModule(in_features_list, out_features_list)
         self.random_state = check_random_state(seed)
@@ -33,6 +35,14 @@ class VIMESelf(pl.LightningModule):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
+
+    def on_before_batch_transfer(self, batch: np.ndarray, dataloader_idx: int) -> Dict[str, Tensor]:
+        X = batch
+        mask = mask_generator(self.hparams.p_masking, X.shape, self.random_state)
+        X_tilde, mask = pretext_generator(X, mask, self.random_state)
+        X, X_tilde, mask = torch.FloatTensor(X), torch.FloatTensor(X_tilde), torch.FloatTensor(mask)
+        batch = {"X": X, "X_tilde": X_tilde, "mask": mask}
+        return batch
 
     def _shared_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         X, X_tilde, mask = batch["X"], batch["X_tilde"], batch["mask"]
@@ -77,32 +87,40 @@ class VIMESelf(pl.LightningModule):
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
 
-
-def consistency_criterion(y_hat: Tensor) -> Tensor:
-    loss = torch.var(y_hat, dim=0).mean()
-    return loss
+    @property
+    def encoder(self):
+        return self.model.encoder
 
 
 class VIMESemi(pl.LightningModule):
     def __init__(
         self,
-        encoder: nn.Module,
+        pretrained_encoder: nn.Module,
         in_features_list: List[int],
         out_features_list: List[int],
         num_classes: int,
+        task_type: Literal["regression", "binary", "multiclass"],
         learning_rate: float = 5e-3,
         p_masking: float = 0.3,
-        K: int = 3,
+        k: int = 3,
         beta: float = 1.0,
         log_interval: int = 10,
         seed: int = 1234,
     ) -> None:
         super().__init__()
+        pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.model = VIMESemiModule(encoder, Predictor(in_features_list, out_features_list, num_classes))
+        self.model = VIMESemiModule(pretrained_encoder, in_features_list, out_features_list, num_classes)
         self.random_state = check_random_state(seed)
-        self.supervised_criterion = nn.BCEWithLogitsLoss()
-        self.consistency_criterion = consistency_criterion
+        if task_type == "regression":
+            self.supervised_criterion = nn.MSELoss()
+        elif task_type == "binary":
+            self.supervised_criterion = nn.BCEWithLogitsLoss()
+        elif task_type == "multiclass":
+            self.supervised_criterion = nn.CrossEntropyLoss()
+        else:
+            raise ValueError(f"task_type must be one of ['regression', 'binary', 'multiclass']. Got: {task_type}")
+        self.consistency_criterion = ConsistencyLoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
 
@@ -115,8 +133,8 @@ class VIMESemi(pl.LightningModule):
             batch["labeled"] = torch.FloatTensor(X_labeled), torch.FloatTensor(y)
             X_unlabeled = batch["unlabeled"]
             X_augmented = []
-            for _ in self.hparams.K:
-                mask = mask_generator(X_unlabeled, self.hparams.p_masking, self.random_state)
+            for _ in self.hparams.k:
+                mask = mask_generator(self.hparams.p_masking, X_unlabeled.shape, self.random_state)
                 X_tilde, _ = pretext_generator(X_unlabeled, mask, self.random_state)
                 X_tilde = torch.FloatTensor(X_tilde)
                 X_augmented.append(X_tilde)
@@ -128,6 +146,9 @@ class VIMESemi(pl.LightningModule):
             X = batch
             batch = torch.FloatTensor(X)
         return batch
+
+    def on_train_epoch_start(self) -> None:
+        self.model.encoder.eval()
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         X_labeled, y = batch["labeled"]
@@ -176,3 +197,8 @@ class VIMESemi(pl.LightningModule):
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
+
+
+class ConsistencyLoss(nn.Module):
+    def forward(self, x: Tensor) -> Tensor:
+        return torch.var(x, dim=0).mean()
