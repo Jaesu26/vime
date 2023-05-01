@@ -37,7 +37,9 @@ class VIMESelf(pl.LightningModule):
         return self.model(x)
 
     def on_before_batch_transfer(self, batch: np.ndarray, dataloader_idx: int) -> Dict[str, Tensor]:
+        print("on_before_batch_transfer")
         X = batch
+        print(type(X))
         mask = mask_generator(self.hparams.p_masking, X.shape, self.random_state)
         X_tilde, mask = pretext_generator(X, mask, self.random_state)
         X, X_tilde, mask = torch.FloatTensor(X), torch.FloatTensor(X_tilde), torch.FloatTensor(mask)
