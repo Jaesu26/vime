@@ -42,14 +42,14 @@ class Encoder(nn.Module):
 def get_block(in_features: int, out_features: int) -> nn.Sequential:
     return nn.Sequential(
         nn.Linear(in_features, out_features),
-        PermuteBeforeBN(),  # For augmenting samples when running vime-semi
+        PermuteBeforeBN1d(),  # For augmenting samples when running vime-semi
         nn.BatchNorm1d(out_features),
-        PermuteAfterBN(),   # For augmenting samples when running vime-semi
+        PermuteAfterBN1d(),   # For augmenting samples when running vime-semi
         nn.GELU(),
     )
 
 
-class PermuteBeforeBN(nn.Module):
+class PermuteBeforeBN1d(nn.Module):
     def forward(self, x):
         if x.ndim != 3:
             return x
@@ -58,7 +58,7 @@ class PermuteBeforeBN(nn.Module):
         return x.permute(1, 2, 0)
 
 
-class PermuteAfterBN(nn.Module):
+class PermuteAfterBN1d(nn.Module):
     def forward(self, x):
         if x.ndim != 3:
             return x
