@@ -129,7 +129,7 @@ class VIMESemi(pl.LightningModule):
         if self.trainer.training:
             X_unlabeled = batch["unlabeled"]
             X_augmented = []
-            for _ in self.hparams.K:
+            for _ in range(self.hparams.K):
                 mask = mask_generator(self.hparams.p_masking, X_unlabeled.shape, self.random_state)
                 X_tilde, _ = pretext_generator(X_unlabeled, mask, self.random_state)
                 X_augmented.append(X_tilde)
