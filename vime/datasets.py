@@ -11,8 +11,11 @@ class LabeledDataset(Dataset):
         assert X.shape[0] == y.shape[0]
         assert X.ndim == 2
         assert y.ndim == 1
-        self.X = torch.from_numpy(X)
-        self.y = torch.from_numpy(y)
+        self.X = torch.tensor(X, dtype=torch.float32)
+        if y.dtype == float:
+            self.y = torch.tensor(y, dtype=torch.float32)
+        else:
+            self.y = torch.tensor(y, dtype=torch.int64)
 
     def __getitem__(self, index: int) -> Tuple[Tensor, Tensor]:
         x = self.X[index]
@@ -26,7 +29,7 @@ class LabeledDataset(Dataset):
 class UnlabeledDataset(Dataset):
     def __init__(self, X: np.ndarray) -> None:
         assert X.ndim == 2
-        self.X = torch.from_numpy(X)
+        self.X = torch.tensor(X, dtype=torch.float32)
 
     def __getitem__(self, index: int) -> Tensor:
         x = self.X[index]
