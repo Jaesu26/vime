@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 class LabeledDataset(Dataset):
     def __init__(self, X: np.ndarray, y: np.ndarray) -> None:
         assert X.shape[0] == y.shape[0]
+        assert X.ndim == y.ndim == 2
         self.X = X
         self.y = y
 
@@ -23,6 +24,7 @@ class LabeledDataset(Dataset):
 
 class UnlabeledDataset(Dataset):
     def __init__(self, X: np.ndarray) -> None:
+        assert X.ndim == 2
         self.X = X
 
     def __getitem__(self, index: int) -> Tensor:
