@@ -10,6 +10,7 @@ class LabeledDataset(Dataset):
     def __init__(self, X: np.ndarray, y: np.ndarray) -> None:
         assert X.shape[0] == y.shape[0]
         assert X.ndim == y.ndim == 2
+        assert y.shape[1] == 1
         self.X = X
         self.y = y
 
