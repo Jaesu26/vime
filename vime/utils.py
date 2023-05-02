@@ -27,5 +27,5 @@ def pretext_generator(
     np.apply_along_axis(func1d=random_state.shuffle, axis=0, arr=X_bar)
     X_bar = torch.from_numpy(X_bar)
     X_tilde = X * (1 - mask) + X_bar * mask  # Corrupts samples(=X)
-    corruption_mask = X.ne(X_tilde).long()
+    corruption_mask = X.ne(X_tilde).float()
     return X_tilde, corruption_mask
