@@ -1,7 +1,6 @@
 from typing import Any, Dict, List, Literal, Tuple
 
 import lightning.pytorch as pl
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -36,25 +35,22 @@ class VIMESelf(pl.LightningModule):
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
 
-    def on_before_batch_transfer(self, batch: np.ndarray, dataloader_idx: int) -> Dict[str, Tensor]:
-        print("on_before_batch_transfer")
+    def on_before_batch_transfer(self, batch: Tensor, dataloader_idx: int) -> Tuple[Tensor, Tensor, Tensor]:
         X = batch
-        print(type(X))
         mask = mask_generator(self.hparams.p_masking, X.shape, self.random_state)
         X_tilde, mask = pretext_generator(X, mask, self.random_state)
-        X, X_tilde, mask = torch.FloatTensor(X), torch.FloatTensor(X_tilde), torch.FloatTensor(mask)
-        batch = {"X": X, "X_tilde": X_tilde, "mask": mask}
+        batch = X, X_tilde, mask
         return batch
 
-    def _shared_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        X, X_tilde, mask = batch["X"], batch["X_tilde"], batch["mask"]
+    def _shared_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
+        X, X_tilde, mask = batch
         X_hat, mask_hat = self(X_tilde)
         mask_vector_estimation_loss = self.mask_criterion(mask_hat, mask)
         reconstruction_loss = self.feature_criterion(X_hat, X)
         loss = mask_vector_estimation_loss + self.hparams.alpha * reconstruction_loss
         return {"loss": loss, "l_m": mask_vector_estimation_loss, "l_r": reconstruction_loss}
 
-    def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
+    def training_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         output = self._shared_step(batch, batch_idx)
         self.training_step_outputs.append(output)
         return output
@@ -71,7 +67,7 @@ class VIMESelf(pl.LightningModule):
                 end=" " * 2,
             )
 
-    def validation_step(self, batch: Any, batch_idx: int) -> None:
+    def validation_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> None:
         output = self._shared_step(batch, batch_idx)
         self.validation_step_outputs.append(output)
 
@@ -131,22 +127,13 @@ class VIMESemi(pl.LightningModule):
 
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         if self.trainer.training:
-            X_labeled, y = batch["labeled"]
-            batch["labeled"] = torch.FloatTensor(X_labeled), torch.FloatTensor(y)
             X_unlabeled = batch["unlabeled"]
             X_augmented = []
             for _ in self.hparams.K:
                 mask = mask_generator(self.hparams.p_masking, X_unlabeled.shape, self.random_state)
                 X_tilde, _ = pretext_generator(X_unlabeled, mask, self.random_state)
-                X_tilde = torch.FloatTensor(X_tilde)
                 X_augmented.append(X_tilde)
             batch["unlabeled"] = torch.stack(X_augmented)
-        elif self.trainer.validating:
-            X, y = batch
-            batch = torch.FloatTensor(X), torch.FloatTensor(y)
-        elif self.trainer.predicting:
-            X = batch
-            batch = torch.FloatTensor(X)
         return batch
 
     def on_train_epoch_start(self) -> None:
