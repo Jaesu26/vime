@@ -42,9 +42,27 @@ class Encoder(nn.Module):
 def get_block(in_features: int, out_features: int) -> nn.Sequential:
     return nn.Sequential(
         nn.Linear(in_features, out_features),
+        PermuteBeforeBN(),  # For augmenting samples when running vime-semi
         nn.BatchNorm1d(out_features),
+        PermuteAfterBN(),   # For augmenting samples when running vime-semi
         nn.GELU(),
     )
+
+
+class PermuteBeforeBN(nn.Module):
+    def forward(self, x):
+        if x.ndim != 3:
+            return x
+        # Shape of x: (K, B, C) -> (B, C, K)
+        return x.permute(1, 2, 0)  # https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html
+
+
+class PermuteAfterBN(nn.Module):
+    def forward(self, x):
+        if x.ndim != 3:
+            return x
+        # Shape of x: (B, C, K) -> (K, B, C)
+        return x.permute(2, 0, 1)
 
 
 class VIMESemiModule(nn.Module):
