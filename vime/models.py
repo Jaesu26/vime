@@ -53,8 +53,9 @@ class PermuteBeforeBN(nn.Module):
     def forward(self, x):
         if x.ndim != 3:
             return x
+        # https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html
         # Shape of x: (K, B, C) -> (B, C, K)
-        return x.permute(1, 2, 0)  # https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html
+        return x.permute(1, 2, 0)
 
 
 class PermuteAfterBN(nn.Module):
