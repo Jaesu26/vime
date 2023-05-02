@@ -133,7 +133,7 @@ class VIMESemi(pl.LightningModule):
                 mask = mask_generator(self.hparams.p_masking, X_unlabeled.shape, self.random_state)
                 X_tilde, _ = pretext_generator(X_unlabeled, mask, self.random_state)
                 X_augmented.append(X_tilde)
-            batch["unlabeled"] = torch.stack(X_augmented, dim=0)  # Shape: (K, B, C)
+            batch["unlabeled"] = torch.stack(X_augmented)  # Shape: (K, B, C)
         return batch
 
     def on_train_epoch_start(self) -> None:
