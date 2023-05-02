@@ -183,7 +183,7 @@ class VIMESemi(pl.LightningModule):
         return y_hat
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
-        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+        optimizer = optim.AdamW(self.model.predictor.parameters(), lr=self.hparams.learning_rate)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
 
