@@ -141,9 +141,9 @@ class VIMESemi(pl.LightningModule):
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         X_labeled, y = batch["labeled"]
-        X_unlabeled = batch["unlabeled"]
+        X_augmented = batch["unlabeled"]
         y_hat_from_original = self(X_labeled)
-        y_hat_from_corruption = self(X_unlabeled)
+        y_hat_from_corruption = self(X_augmented)
         supervised_loss = self.supervised_criterion(y_hat_from_original, y)
         consistency_loss = self.consistency_criterion(y_hat_from_corruption)
         loss = supervised_loss + self.hparams.beta * consistency_loss
