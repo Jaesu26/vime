@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import lightning.pytorch as pl
 import torch
@@ -110,7 +110,7 @@ class VIMESemi(pl.LightningModule):
         in_features_list: A list of input feature size for each layer.
         out_features_list: A list of output feature size for each layer.
         num_classes: The number of classes.
-        task_type: The type of the downstream task. Must be one of ["regression", "binary", "multiclass"].
+        supervised_criterion: The supervised loss function (i.g. torch.nn.CrossEntropyLoss()).
         learning_rate: The learning rate for the optimizer.
         p_masking: The probability of masking a feature.
         K: The number of augmented samples.
@@ -125,7 +125,7 @@ class VIMESemi(pl.LightningModule):
         in_features_list: List[int],
         out_features_list: List[int],
         num_classes: int,
-        task_type: Literal["regression", "binary", "multiclass"],
+        supervised_criterion: Callable[[Tensor, Tensor], Tensor],
         learning_rate: float = 5e-3,
         p_masking: float = 0.3,
         K: int = 3,
@@ -138,14 +138,7 @@ class VIMESemi(pl.LightningModule):
         self.save_hyperparameters()
         self.model = VIMESemiModule(pretrained_encoder, in_features_list, out_features_list, num_classes)
         self.random_state = check_random_state(seed)
-        if task_type == "regression":
-            self.supervised_criterion = nn.MSELoss()
-        elif task_type == "binary":
-            self.supervised_criterion = nn.BCEWithLogitsLoss()
-        elif task_type == "multiclass":
-            self.supervised_criterion = nn.CrossEntropyLoss()
-        else:
-            raise ValueError(f"task_type must be one of ['regression', 'binary', 'multiclass']. Got: {task_type}")
+        self.supervised_criterion = supervised_criterion
         self.consistency_criterion = ConsistencyLoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
@@ -218,4 +211,4 @@ class VIMESemi(pl.LightningModule):
 
 class ConsistencyLoss(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
-        return x.var(dim=0).mean()
+        return torch.mean(torch.var(x, dim=0))
