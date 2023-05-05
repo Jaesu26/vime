@@ -12,6 +12,18 @@ from .utils import mask_generator, pretext_generator
 
 
 class VIMESelf(pl.LightningModule):
+    """A VIME for self-supervised learning.
+
+    Args:
+        in_features_list: A list of input feature size for each layer.
+        out_features_list: A list of output feature size for each layer.
+        learning_rate: The learning rate for the optimizer.
+        p_masking: The probability of masking a feature.
+        alpha: A hyperparameter to control the weights of mask vector estimation loss and reconstruction loss.
+        log_interval: The logging frequency.
+        seed: The random seed for reproducibility.
+    """
+
     def __init__(
         self,
         in_features_list: List[int],
@@ -91,6 +103,22 @@ class VIMESelf(pl.LightningModule):
 
 
 class VIMESemi(pl.LightningModule):
+    """A VIME for semi-supervised learning.
+
+    Args:
+        pretrained_encoder: The pretrained encoder network.
+        in_features_list: A list of input feature size for each layer.
+        out_features_list: A list of output feature size for each layer.
+        num_classes: The number of classes.
+        task_type: The type of the downstream task. Must be one of ["regression", "binary", "multiclass"].
+        learning_rate: The learning rate for the optimizer.
+        p_masking: The probability of masking a feature.
+        K: The number of augmented samples.
+        beta: A hyperparameter to control the weights of supervised loss and consistency loss.
+        log_interval: The logging frequency.
+        seed: The random seed for reproducibility.
+    """
+
     def __init__(
         self,
         pretrained_encoder: nn.Module,
@@ -137,7 +165,7 @@ class VIMESemi(pl.LightningModule):
         return batch
 
     def on_train_epoch_start(self) -> None:
-        self.model.encoder.eval()
+        self.model.freeze_encoder()
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         X_labeled, y = batch["labeled"]
@@ -190,4 +218,4 @@ class VIMESemi(pl.LightningModule):
 
 class ConsistencyLoss(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
-        return torch.var(x, dim=0).mean()
+        return x.var(dim=0).mean()

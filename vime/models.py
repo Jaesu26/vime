@@ -1,5 +1,6 @@
 from typing import List, Tuple
 
+import torch
 import torch.nn as nn
 from torch import Tensor
 
@@ -75,19 +76,20 @@ class VIMESemiModule(nn.Module):
         num_classes: int,
     ) -> None:
         super().__init__()
-        self.encoder = pretrained_encoder
+        self.pretrained_encoder = pretrained_encoder
         self.predictor = Predictor(in_features_list, out_features_list, num_classes)
         self.freeze_encoder()
 
     def forward(self, x: Tensor) -> Tensor:
-        z = self.encoder(x)
+        with torch.no_grad():
+            z = self.pretrained_encoder(x)
         y_hat = self.predictor(z)
         return y_hat
 
     def freeze_encoder(self) -> None:
-        for param in self.encoder.parameters():
+        for param in self.pretrained_encoder.parameters():
             param.requires_grad = False
-        self.encoder.eval()
+        self.pretrained_encoder.eval()
 
 
 class Predictor(nn.Module):
@@ -103,5 +105,17 @@ class Predictor(nn.Module):
 
     def forward(self, z: Tensor) -> Tensor:
         z = self.model(z)
+        y_hat = self.classifier(z)
+        return y_hat
+
+
+class MLPClassifier(nn.Module):
+    def __init__(self, dim: int, hidden_dim: int, num_classes: int) -> None:
+        super().__init__()
+        self.fc = get_block(dim, hidden_dim)
+        self.classifier = nn.Linear(hidden_dim, num_classes)
+
+    def forward(self, x: Tensor) -> Tensor:
+        z = self.fc(x)
         y_hat = self.classifier(z)
         return y_hat
