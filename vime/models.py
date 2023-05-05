@@ -5,7 +5,18 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class VIMESelfModule(nn.Module):
+class InitializerMixin:
+    def _init_weights(self: nn.Module) -> None:
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+                nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
+
+
+class VIMESelfNetwork(nn.Module):
     def __init__(self, in_features_list: List[int], out_features_list: List[int]) -> None:
         super().__init__()
         dim = in_features_list[0]
@@ -25,7 +36,7 @@ class VIMESelfModule(nn.Module):
         return self._encoder
 
 
-class Encoder(nn.Module):
+class Encoder(nn.Module, InitializerMixin):
     def __init__(self, in_features_list: List[int], out_features_list: List[int]) -> None:
         super().__init__()
         self.encoder = nn.Sequential(
@@ -34,6 +45,7 @@ class Encoder(nn.Module):
                 for in_features, out_features in zip(in_features_list, out_features_list)
             ]
         )
+        self._init_weights()
 
     def forward(self, x: Tensor) -> Tensor:
         z = self.encoder(x)
@@ -46,12 +58,12 @@ def get_block(in_features: int, out_features: int) -> nn.Sequential:
         PermuteBeforeBN1d(),  # For augmenting samples when running vime-semi
         nn.BatchNorm1d(out_features),
         PermuteAfterBN1d(),   # For augmenting samples when running vime-semi
-        nn.GELU(),
+        nn.Mish(),
     )
 
 
 class PermuteBeforeBN1d(nn.Module):
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         if x.ndim != 3:
             return x
         # https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html
@@ -60,14 +72,14 @@ class PermuteBeforeBN1d(nn.Module):
 
 
 class PermuteAfterBN1d(nn.Module):
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         if x.ndim != 3:
             return x
         # Shape of x: (B, C, K) -> (K, B, C)
         return x.permute(2, 0, 1)
 
 
-class VIMESemiModule(nn.Module):
+class VIMESemiNetwork(nn.Module):
     def __init__(
         self,
         pretrained_encoder: nn.Module,
@@ -92,30 +104,32 @@ class VIMESemiModule(nn.Module):
         self.pretrained_encoder.eval()
 
 
-class Predictor(nn.Module):
+class Predictor(nn.Module, InitializerMixin):
     def __init__(self, in_features_list: List[int], out_features_list: List[int], num_classes: int) -> None:
         super().__init__()
-        self.model = nn.Sequential(
+        self.fc = nn.Sequential(
             *[
                 get_block(in_features, out_features)
                 for in_features, out_features in zip(in_features_list, out_features_list)
             ]
         )
         self.classifier = nn.Linear(out_features_list[-1], num_classes)
+        self._init_weights()
 
     def forward(self, z: Tensor) -> Tensor:
-        z = self.model(z)
+        z = self.fc(z)
         y_hat = self.classifier(z)
         return y_hat
 
 
-class MLPClassifier(nn.Module):
+class MLP(nn.Module, InitializerMixin):
     def __init__(self, dim: int, hidden_dim: int, num_classes: int) -> None:
         super().__init__()
-        self.fc = get_block(dim, hidden_dim)
-        self.classifier = nn.Linear(hidden_dim, num_classes)
+        self.mlp = get_block(dim, hidden_dim)
+        self.fc = nn.Linear(hidden_dim, num_classes)
+        self._init_weights()
 
     def forward(self, x: Tensor) -> Tensor:
-        z = self.fc(x)
-        y_hat = self.classifier(z)
+        z = self.mlp(x)
+        y_hat = self.fc(z)
         return y_hat

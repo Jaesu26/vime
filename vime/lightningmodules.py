@@ -7,7 +7,7 @@ import torch.optim as optim
 from sklearn.utils import check_random_state
 from torch import Tensor
 
-from .models import VIMESelfModule, VIMESemiModule
+from .models import MLP, VIMESelfNetwork, VIMESemiNetwork
 from .utils import mask_generator, pretext_generator
 
 
@@ -37,7 +37,7 @@ class VIMESelf(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.model = VIMESelfModule(in_features_list, out_features_list)
+        self.vime_self = VIMESelfNetwork(in_features_list, out_features_list)
         self.random_state = check_random_state(seed)
         self.feature_criterion = nn.MSELoss()
         self.mask_criterion = nn.BCEWithLogitsLoss()
@@ -45,7 +45,7 @@ class VIMESelf(pl.LightningModule):
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.model(x)
+        return self.vime_self(x)
 
     def on_before_batch_transfer(self, batch: Tensor, dataloader_idx: int) -> Tuple[Tensor, Tensor, Tensor]:
         X = batch
@@ -136,7 +136,7 @@ class VIMESemi(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.model = VIMESemiModule(pretrained_encoder, in_features_list, out_features_list, num_classes)
+        self.vime_semi = VIMESemiNetwork(pretrained_encoder, in_features_list, out_features_list, num_classes)
         self.random_state = check_random_state(seed)
         self.supervised_criterion = supervised_criterion
         self.consistency_criterion = ConsistencyLoss()
@@ -144,7 +144,7 @@ class VIMESemi(pl.LightningModule):
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.model(x)
+        return self.vime_semi(x)
 
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         if self.trainer.training:
@@ -212,3 +212,50 @@ class VIMESemi(pl.LightningModule):
 class ConsistencyLoss(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         return torch.mean(torch.var(x, dim=0))
+
+
+class MLPClassifier(pl.LightningModule):
+    def __init__(self, dim: int, hidden_dim: int, num_classes: int) -> None:
+        super().__init__()
+        self.mlp_classifier = MLP(dim, hidden_dim, num_classes)
+        if num_classes == 1:
+            self.criterion = nn.BCEWithLogitsLoss()
+        else:
+            self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x: Tensor) -> Tensor:
+        y_hat = self.mlp_classifier(x)
+        return y_hat
+
+    def _shared_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
+        X, y = batch
+        y_hat = self(X)
+        loss = self.criterion(y_hat, y)
+        return {"loss": loss}
+
+    def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
+        output = self._shared_step(batch, batch_idx)
+        self.training_step_outputs.append(output)
+        return output
+
+    def on_train_epoch_end(self) -> None:
+        mean_loss = torch.stack([output["loss"] for output in self.training_step_outputs]).mean()
+        self.training_step_outputs.clear()
+        if self.current_epoch % self.hparams.log_interval == 0:
+            print(f"Epoch {self.current_epoch} | Train Loss: {mean_loss:.4f}", end=" " * 2)
+
+    def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
+        output = self._shared_step(batch, batch_idx)
+        self.validation_step_outputs.append(output)
+
+    def on_validation_epoch_end(self) -> None:
+        mean_loss = torch.stack([output["loss"] for output in self.validation_step_outputs]).mean()
+        self.validation_step_outputs.clear()
+        self.log_dict({"val_loss": mean_loss})
+        if self.current_epoch % self.hparams.log_interval == 0:
+            print(f"Val Loss: {mean_loss:.4f}")
+
+    def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
+        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
+        return [optimizer], [scheduler]
