@@ -58,7 +58,7 @@ def get_block(in_features: int, out_features: int) -> nn.Sequential:
         PermuteBeforeBN1d(),  # For augmenting samples when running vime-semi
         nn.BatchNorm1d(out_features),
         PermuteAfterBN1d(),  # For augmenting samples when running vime-semi
-        nn.Mish(),
+        nn.GELU(),
     )
 
 
