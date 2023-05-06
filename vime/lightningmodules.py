@@ -96,7 +96,11 @@ class VIMESelf(pl.LightningModule):
 
     @property
     def should_log(self):
-        return self.current_epoch % self.hparams.log_interval == 0 or self.current_epoch + 1 == self.trainer.max_epochs
+        return (
+            self.current_epoch == 0
+            or (self.current_epoch + 1) % self.hparams.log_interval == 0
+            or self.current_epoch + 1 == self.trainer.max_epochs
+        )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
@@ -211,7 +215,11 @@ class VIMESemi(pl.LightningModule):
 
     @property
     def should_log(self):
-        return self.current_epoch % self.hparams.log_interval == 0 or self.current_epoch + 1 == self.trainer.max_epochs
+        return (
+            self.current_epoch == 0
+            or (self.current_epoch + 1) % self.hparams.log_interval == 0
+            or self.current_epoch + 1 == self.trainer.max_epochs
+        )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
         optimizer = optim.AdamW(self.model.predictor.parameters(), lr=self.hparams.learning_rate)
@@ -267,7 +275,11 @@ class MLPClassifier(pl.LightningModule):
 
     @property
     def should_log(self):
-        return self.current_epoch % self.hparams.log_interval == 0 or self.current_epoch + 1 == self.trainer.max_epochs
+        return (
+            self.current_epoch == 0
+            or (self.current_epoch + 1) % self.hparams.log_interval == 0
+            or self.current_epoch + 1 == self.trainer.max_epochs
+        )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
