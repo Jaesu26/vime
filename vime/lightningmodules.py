@@ -109,7 +109,7 @@ class VIMESelf(pl.LightningModule):
 
     @property
     def encoder(self) -> nn.Module:
-        return self.model.encoder
+        return self.vime_self.encoder
 
 
 class VIMESemi(pl.LightningModule):
@@ -168,7 +168,7 @@ class VIMESemi(pl.LightningModule):
         return batch
 
     def on_train_epoch_start(self) -> None:
-        self.model.freeze_encoder()
+        self.vime_semi.freeze_encoder()
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         X_labeled, y = batch["labeled"]
@@ -222,7 +222,7 @@ class VIMESemi(pl.LightningModule):
         )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
-        optimizer = optim.AdamW(self.model.predictor.parameters(), lr=self.hparams.learning_rate)
+        optimizer = optim.AdamW(self.vime_semi.predictor.parameters(), lr=self.hparams.learning_rate)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
 
