@@ -74,9 +74,9 @@ class VIMESelf(pl.LightningModule):
         mean_loss_m = torch.stack([output["l_m"] for output in self.training_step_outputs]).mean()
         mean_loss_r = torch.stack([output["l_r"] for output in self.training_step_outputs]).mean()
         self.training_step_outputs.clear()
-        if self.current_epoch % self.hparams.log_interval == 0:
+        if self.should_log:
             print(
-                f"Epoch {self.current_epoch} | Train Loss: {mean_loss:.4f}"
+                f"Epoch {self.current_epoch + 1} | Train Loss: {mean_loss:.4f}"
                 f" | Train Loss_m: {mean_loss_m:.4f} | Train Loss_r: {mean_loss_r:.4f}",
                 end=" " * 2,
             )
@@ -91,8 +91,12 @@ class VIMESelf(pl.LightningModule):
         mean_loss_r = torch.stack([output["l_r"] for output in self.validation_step_outputs]).mean()
         self.validation_step_outputs.clear()
         self.log_dict({"val_loss": mean_loss})
-        if self.current_epoch % self.hparams.log_interval == 0:
+        if self.should_log:
             print(f"Val Loss: {mean_loss:.4f} | Val Loss_m: {mean_loss_m:.4f} | Val Loss_r: {mean_loss_r:.4f}")
+
+    @property
+    def should_log(self):
+        return self.current_epoch % self.hparams.log_interval == 0 or self.current_epoch + 1 == self.trainer.max_epochs
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
@@ -179,9 +183,9 @@ class VIMESemi(pl.LightningModule):
         mean_loss_s = torch.stack([output["l_s"] for output in self.training_step_outputs]).mean()
         mean_loss_u = torch.stack([output["l_u"] for output in self.training_step_outputs]).mean()
         self.training_step_outputs.clear()
-        if self.current_epoch % self.hparams.log_interval == 0:
+        if self.should_log:
             print(
-                f"Epoch {self.current_epoch} | Train Loss: {mean_loss:.4f}"
+                f"Epoch {self.current_epoch + 1} | Train Loss: {mean_loss:.4f}"
                 f" | Train Loss_s: {mean_loss_s:.4f} | Train Loss_u: {mean_loss_u:.4f}",
                 end=" " * 2,
             )
@@ -197,13 +201,17 @@ class VIMESemi(pl.LightningModule):
         mean_loss_s = torch.stack([output["loss_s"] for output in self.validation_step_outputs]).mean()
         self.validation_step_outputs.clear()
         self.log_dict({"val_loss": mean_loss_s})
-        if self.current_epoch % self.hparams.log_interval == 0:
+        if self.should_log:
             print(f"Val Loss_s: {mean_loss_s:.4f}")
 
     def predict_step(self, batch: Tensor, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
         X = batch
         y_hat = self(X)
         return y_hat
+
+    @property
+    def should_log(self):
+        return self.current_epoch % self.hparams.log_interval == 0 or self.current_epoch + 1 == self.trainer.max_epochs
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
         optimizer = optim.AdamW(self.model.predictor.parameters(), lr=self.hparams.learning_rate)
@@ -240,8 +248,8 @@ class MLPClassifier(pl.LightningModule):
     def on_train_epoch_end(self) -> None:
         mean_loss = torch.stack([output["loss"] for output in self.training_step_outputs]).mean()
         self.training_step_outputs.clear()
-        if self.current_epoch % self.hparams.log_interval == 0:
-            print(f"Epoch {self.current_epoch} | Train Loss: {mean_loss:.4f}", end=" " * 2)
+        if self.should_log:
+            print(f"Epoch {self.current_epoch + 1} | Train Loss: {mean_loss:.4f}", end=" " * 2)
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
         output = self._shared_step(batch, batch_idx)
@@ -254,8 +262,12 @@ class MLPClassifier(pl.LightningModule):
         self.validation_step_outputs.clear()
         self.log_dict({"val_loss": mean_loss, "val_macro_acc": macro_acc})
         self.macro_accuracy.reset()
-        if self.current_epoch % self.hparams.log_interval == 0:
+        if self.should_log:
             print(f"Val Loss: {mean_loss:.4f} | Val Macro Acc: {macro_acc:.4f}")
+
+    @property
+    def should_log(self):
+        return self.current_epoch % self.hparams.log_interval == 0 or self.current_epoch + 1 == self.trainer.max_epochs
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
