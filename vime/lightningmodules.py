@@ -6,7 +6,9 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.utils import check_random_state
 from torch import Tensor
+from torchmetrics import Accuracy
 
+from .loss import ConsistencyLoss
 from .models import MLP, VIMESelfNetwork, VIMESemiNetwork
 from .utils import mask_generator, pretext_generator
 
@@ -209,19 +211,16 @@ class VIMESemi(pl.LightningModule):
         return [optimizer], [scheduler]
 
 
-class ConsistencyLoss(nn.Module):
-    def forward(self, x: Tensor) -> Tensor:
-        return torch.mean(torch.var(x, dim=0))
-
-
 class MLPClassifier(pl.LightningModule):
     def __init__(self, dim: int, hidden_dim: int, num_classes: int) -> None:
         super().__init__()
         self.mlp_classifier = MLP(dim, hidden_dim, num_classes)
-        if num_classes == 1:
+        task = "binary" if num_classes == 1 else "multiclass"
+        if task == "binary":
             self.criterion = nn.BCEWithLogitsLoss()
         else:
             self.criterion = nn.CrossEntropyLoss()
+        self.macro_accuracy = Accuracy(task=task, num_classes=num_classes, average="macro")
 
     def forward(self, x: Tensor) -> Tensor:
         y_hat = self.mlp_classifier(x)
@@ -231,7 +230,7 @@ class MLPClassifier(pl.LightningModule):
         X, y = batch
         y_hat = self(X)
         loss = self.criterion(y_hat, y)
-        return {"loss": loss}
+        return {"loss": loss, "y_hat": y_hat, "y": y}
 
     def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         output = self._shared_step(batch, batch_idx)
@@ -246,14 +245,17 @@ class MLPClassifier(pl.LightningModule):
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
         output = self._shared_step(batch, batch_idx)
+        self.macro_accuracy.update(output["y_hat"], output["y"])
         self.validation_step_outputs.append(output)
 
     def on_validation_epoch_end(self) -> None:
         mean_loss = torch.stack([output["loss"] for output in self.validation_step_outputs]).mean()
+        macro_acc = self.macro_accuracy.compute()
         self.validation_step_outputs.clear()
-        self.log_dict({"val_loss": mean_loss})
+        self.log_dict({"val_loss": mean_loss, "val_macro_acc": macro_acc})
+        self.macro_accuracy.reset()
         if self.current_epoch % self.hparams.log_interval == 0:
-            print(f"Val Loss: {mean_loss:.4f}")
+            print(f"Val Loss: {mean_loss:.4f} | Val Macro Acc: {macro_acc:.4f}")
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
