@@ -24,12 +24,12 @@ class VIMESelfNetwork(nn.Module):
         hidden_dims: List[int],
         cat_indices: Sequence[int] = (),
         cat_dims: Sequence[int] = (),
-        cat_embedding_dims: Union[Sequence[int], int] = 2,
+        cat_embedding_dim: Union[Sequence[int], int] = 2,
     ) -> None:
         super().__init__()
         representation_dim = hidden_dims[-1]
-        self._encoder = Encoder(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dims)
-        self.feature_vector_estimator = nn.Linear(representation_dim, input_dim)
+        self._encoder = Encoder(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
+        self.feature_vector_estimator = nn.Linear(representation_dim, representation_dim)
         self.mask_vector_estimator = nn.Linear(representation_dim, input_dim)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
@@ -50,14 +50,10 @@ class Encoder(nn.Module, InitializerMixin):
         hidden_dims: List[int],
         cat_indices: Sequence[int] = (),
         cat_dims: Sequence[int] = (),
-        cat_embedding_dims: Union[Sequence[int], int] = 2,
+        cat_embedding_dim: Union[Sequence[int], int] = 2,
     ) -> None:
         super().__init__()
-        self.embeddings = EmbeddingGenerator(input_dim, cat_indices, cat_dims, cat_embedding_dims)
-        self.cat_indices = cat_indices
-        self.cat_dims = cat_dims
-        self.cat_embedding_dims = cat_embedding_dims
-        self.total_cat_dim = self.embeddings.total_cat_dim
+        self.embeddings = EmbeddingGenerator(input_dim, cat_indices, cat_dims, cat_embedding_dim)
         hidden_dims = hidden_dims[:]
         hidden_dims[-1] += self.embeddings.last_additional_dim
         in_dims = [self.embeddings.post_embedding_dim] + hidden_dims[:-1]
@@ -70,16 +66,10 @@ class Encoder(nn.Module, InitializerMixin):
         )
         self._init_weights()
 
-    def forward(self, x: Tensor) -> Tuple[Tensor, List[Tensor]]:
+    def forward(self, x: Tensor) -> Tensor:
         x_embedded = self.embeddings(x)
         z = self.encoder(x_embedded)
-        z_continuous = z[:-self.total_cat_dim]
-        z_categorical = z[self.total_cat_dim:]
-        z_cats = [
-            z_categorical[start_index:end_index]
-            for start_index, end_index in zip(self.cat_dims[:-1], self.cat_dims[1:])
-        ]
-        return z_continuous, z_cats
+        return z
 
 
 def get_block(in_dim: int, out_dim: int) -> nn.Sequential:
@@ -111,15 +101,17 @@ class PermuteAfterBN1d(nn.Module):
 
 class EmbeddingGenerator(nn.Module):
     """Classical embedding generator
-    from https://github.com/dreamquark-ai/tabnet/blob/v4.0/pytorch_tabnet/tab_network.py#L778
 
     Args:
         input_dim: The number of features.
         cat_indices: The positional index for each categorical features.
-        cat_dims: The number of modalities for each categorial features.
+        cat_dims: The number of modalities for each categorical features.
             If the list is empty, no embeddings will be done.
         cat_embedding_dim: The embedding dimension for each categorical features.
             If int, the same embedding dimension will be used for all categorical features.
+
+    References:
+         https://github.com/dreamquark-ai/tabnet/blob/v4.0/pytorch_tabnet/tab_network.py#L778
     """
 
     def __init__(
@@ -149,8 +141,7 @@ class EmbeddingGenerator(nn.Module):
         if self.skip_embedding:
             return x
         x_continuous = x[:, self.cont_indices]
-        x_categorical = x[:, self.cat_indices]
-        cats_embedded = [embedding(x_cat) for x_cat, embedding in zip(x_categorical, self.embeddings)]
+        cats_embedded = [embedding(x[:, cat_index]) for cat_index, embedding in zip(self.cat_indices, self.embeddings)]
         x_embedded = torch.cat((x_continuous, *cats_embedded), dim=1)
         return x_embedded
 

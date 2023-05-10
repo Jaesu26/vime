@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
@@ -14,14 +14,19 @@ from .utils import mask_generator, pretext_generator
 
 
 class VIMESelf(pl.LightningModule):
-    """A VIME for self-supervised learning.
+    """The VIME for self-supervised learning.
 
     Args:
-        in_features_list: A list of input feature size for each layer.
-        out_features_list: A list of output feature size for each layer.
+        input_dim: The number of features.
+        hidden_dims: The number of features each hidden layer.
+        cat_indices: The positional index for each categorical features.
+        cat_dims: The number of modalities for each categorical features.
+            If the list is empty, no embeddings will be done.
+        cat_embedding_dim: The embedding dimension for each categorical features.
+            If int, the same embedding dimension will be used for all categorical features.
         learning_rate: The learning rate for the optimizer.
         p_masking: The probability of masking a feature.
-        alpha: A hyperparameter to control the weights of mask vector estimation loss and reconstruction loss.
+        alpha: The hyperparameter to control the weights of mask vector estimation loss and reconstruction loss.
         log_interval: The logging frequency.
         seed: The random seed for reproducibility.
     """
@@ -30,8 +35,9 @@ class VIMESelf(pl.LightningModule):
         self,
         input_dim: int,
         hidden_dims: List[int],
-        cat_indices: Optional[List[int]] = None,
-        cat_dims: Optional[List[int]] = None,
+        cat_indices: Sequence[int] = (),
+        cat_dims: Sequence[int] = (),
+        cat_embedding_dim: Union[Sequence[int], int] = 2,
         learning_rate: float = 1e-2,
         p_masking: float = 0.3,
         alpha: float = 2.0,
@@ -41,12 +47,15 @@ class VIMESelf(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.vime_self = VIMESelfNetwork(input_dim, hidden_dims)
-        self.cat_indices = cat_indices
-        self.cat_dims = cat_dims
+        self.vime_self = VIMESelfNetwork(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
+        self.cont_indices = self.vime_self.encoder.embeddings.cont_indices
+        self.cat_indices = self.vime_self.encoder.embeddings.cat_indices
+        self.cat_dims = self.vime_self.encoder.embeddings.cat_dims
+        self.cat_embedding_dims = self.vime_self.encoder.embeddings.cat_embedding_dims
+        self.total_cat_dim = self.vime_self.encoder.embeddings.cat_dims
         self.random_state = check_random_state(seed)
         self.continuous_feature_criterion = nn.MSELoss()
-        self.categorical_feature_criterion = nn.MSELoss()
+        self.categorical_feature_criterion = nn.CrossEntropyLoss()
         self.mask_criterion = nn.BCEWithLogitsLoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
@@ -65,7 +74,19 @@ class VIMESelf(pl.LightningModule):
         X, X_tilde, mask = batch
         X_hat, mask_hat = self(X_tilde)
         mask_vector_estimation_loss = self.mask_criterion(mask_hat, mask)
-        reconstruction_loss = self.feature_criterion(X_hat, X)
+        X_continuous = X[:, self.cont_indices]
+        X_hat_continuous = X_hat[:-self.total_cat_dim]
+        X_hat_categorical = X_hat[-self.total_cat_dim:]
+        Xs_categorical_hat = [
+            X_hat_categorical[start_index:end_index]
+            for start_index, end_index in zip(self.cat_dims[:-1], self.cat_dims[1:])
+        ]
+        reconstruction_loss_cat = 0.0
+        for cat_index, X_hat_cat in zip(self.cat_indices, Xs_categorical_hat):
+            loss = self.categorical_feature_criterion(X[:, cat_index], X_hat_cat)
+            reconstruction_loss_cat += loss
+        reconstruction_loss_cont = self.continuous_feature_criterion(X_hat_continuous, X_continuous)
+        reconstruction_loss = reconstruction_loss_cont + reconstruction_loss_cat
         loss = mask_vector_estimation_loss + self.hparams.alpha * reconstruction_loss
         return {"loss": loss, "l_m": mask_vector_estimation_loss, "l_r": reconstruction_loss}
 
@@ -118,18 +139,18 @@ class VIMESelf(pl.LightningModule):
 
 
 class VIMESemi(pl.LightningModule):
-    """A VIME for semi-supervised learning.
+    """The VIME for semi-supervised learning.
 
     Args:
-        pretrained_encoder: The pretrained encoder network.
-        in_features_list: A list of input feature size for each layer.
-        out_features_list: A list of output feature size for each layer.
+        pretrained_encoder: The pretrained encoder.
+        input_dim: The number of features.
+        hidden_dims: The number of features each hidden layer.
         num_classes: The number of classes.
         supervised_criterion: The supervised loss function (i.g. torch.nn.CrossEntropyLoss()).
         learning_rate: The learning rate for the optimizer.
         p_masking: The probability of masking a feature.
         K: The number of augmented samples.
-        beta: A hyperparameter to control the weights of supervised loss and consistency loss.
+        beta: The hyperparameter to control the weights of supervised loss and consistency loss.
         log_interval: The logging frequency.
         seed: The random seed for reproducibility.
     """
