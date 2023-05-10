@@ -1,6 +1,7 @@
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Sequence, Tuple, Union
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -75,15 +76,16 @@ class VIMESelf(pl.LightningModule):
         X_hat, mask_hat = self(X_tilde)
         mask_vector_estimation_loss = self.mask_criterion(mask_hat, mask)
         X_continuous = X[:, self.cont_indices]
-        X_hat_continuous = X_hat[:-self.total_cat_dim]
-        X_hat_categorical = X_hat[-self.total_cat_dim:]
-        Xs_categorical_hat = [
-            X_hat_categorical[start_index:end_index]
-            for start_index, end_index in zip(self.cat_dims[:-1], self.cat_dims[1:])
+        X_hat_continuous = X_hat[:, : -self.total_cat_dim]
+        X_hat_categorical = X_hat[:, -self.total_cat_dim :]
+        Xs_categorical_hat = [X_hat_categorical[:, : self.cat_dims[0]]]
+        Xs_categorical_hat += [
+            X_hat_categorical[:, start_index:end_index]
+            for start_index, end_index in zip(np.cumsum(self.cat_dims)[:-1], np.cumsum(self.cat_dims)[1:])
         ]
         reconstruction_loss_cat = 0.0
         for cat_index, X_hat_cat in zip(self.cat_indices, Xs_categorical_hat):
-            loss = self.categorical_feature_criterion(X[:, cat_index], X_hat_cat)
+            loss = self.categorical_feature_criterion(X_hat_cat, X[:, cat_index].long())
             reconstruction_loss_cat += loss
         reconstruction_loss_cont = self.continuous_feature_criterion(X_hat_continuous, X_continuous)
         reconstruction_loss = reconstruction_loss_cont + reconstruction_loss_cat

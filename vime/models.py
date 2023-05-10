@@ -27,8 +27,8 @@ class VIMESelfNetwork(nn.Module):
         cat_embedding_dim: Union[Sequence[int], int] = 2,
     ) -> None:
         super().__init__()
-        representation_dim = hidden_dims[-1]
         self._encoder = Encoder(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
+        representation_dim = hidden_dims[-1] + self._encoder.embeddings.last_additional_dim
         self.feature_vector_estimator = nn.Linear(representation_dim, representation_dim)
         self.mask_vector_estimator = nn.Linear(representation_dim, input_dim)
 
@@ -54,16 +54,11 @@ class Encoder(nn.Module, InitializerMixin):
     ) -> None:
         super().__init__()
         self.embeddings = EmbeddingGenerator(input_dim, cat_indices, cat_dims, cat_embedding_dim)
-        hidden_dims = hidden_dims[:]
-        hidden_dims[-1] += self.embeddings.last_additional_dim
-        in_dims = [self.embeddings.post_embedding_dim] + hidden_dims[:-1]
-        out_dims = hidden_dims
-        self.encoder = nn.Sequential(
-            *[
-                get_block(in_dim, out_dim)
-                for in_dim, out_dim in zip(in_dims, out_dims)
-            ]
-        )
+        input_dim = input_dim if self.embeddings.skip_embedding else self.embeddings.post_embedding_dim
+        representation_dim = hidden_dims[-1] + self.embeddings.last_additional_dim
+        in_dims = [input_dim] + hidden_dims[:-1]
+        out_dims = hidden_dims[:-1] + [representation_dim]
+        self.encoder = nn.Sequential(*[get_block(in_dim, out_dim) for in_dim, out_dim in zip(in_dims, out_dims)])
         self._init_weights()
 
     def forward(self, x: Tensor) -> Tensor:
@@ -100,14 +95,14 @@ class PermuteAfterBN1d(nn.Module):
 
 
 class EmbeddingGenerator(nn.Module):
-    """Classical embedding generator
+    """Classical embedding generator.
 
     Args:
         input_dim: The number of features.
-        cat_indices: The positional index for each categorical features.
-        cat_dims: The number of modalities for each categorical features.
+        cat_indices: The positional index for each categorical feature.
+        cat_dims: The number of modalities for each categorical feature.
             If the list is empty, no embeddings will be done.
-        cat_embedding_dim: The embedding dimension for each categorical features.
+        cat_embedding_dim: The embedding dimension for each categorical feature.
             If int, the same embedding dimension will be used for all categorical features.
 
     References:
@@ -132,10 +127,12 @@ class EmbeddingGenerator(nn.Module):
         self.post_embedding_dim = input_dim + sum(self.cat_embedding_dims) - self.num_cats
         self.last_additional_dim = self.total_cat_dim - self.num_cats
         self._sort_indices_for_seed()
-        self.embeddings = nn.ModuleList([
-            nn.Embedding(cat_dim, cat_embedding_dim)
-            for cat_dim, cat_embedding_dim in zip(self.cat_dims, self.cat_embedding_dims)
-        ])
+        self.embeddings = nn.ModuleList(
+            [
+                nn.Embedding(cat_dim, cat_embedding_dim)
+                for cat_dim, cat_embedding_dim in zip(self.cat_dims, self.cat_embedding_dims)
+            ]
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         if self.skip_embedding:
@@ -171,7 +168,7 @@ class EmbeddingGenerator(nn.Module):
         return cat_indices, cat_dims, cat_embedding_dims
 
     def _sort_indices_for_seed(self) -> None:
-        if self.skip_embedding:
+        if not self.num_cats:
             return
         sorted_indices = np.argsort(self.cat_indices)
         self.cat_indices = sorted(self.cat_indices)
@@ -209,12 +206,7 @@ class Predictor(nn.Module, InitializerMixin):
         super().__init__()
         in_dims = [input_dim] + hidden_dims[:-1]
         out_dims = hidden_dims
-        self.fc = nn.Sequential(
-            *[
-                get_block(in_dim, out_dim)
-                for in_dim, out_dim in zip(in_dims, out_dims)
-            ]
-        )
+        self.fc = nn.Sequential(*[get_block(in_dim, out_dim) for in_dim, out_dim in zip(in_dims, out_dims)])
         self.classifier = nn.Linear(out_dims[-1], num_classes)
         self._init_weights()
 
