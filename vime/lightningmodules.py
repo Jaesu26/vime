@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import lightning.pytorch as pl
 import torch
@@ -28,8 +28,10 @@ class VIMESelf(pl.LightningModule):
 
     def __init__(
         self,
-        in_features_list: List[int],
-        out_features_list: List[int],
+        input_dim: int,
+        hidden_dims: List[int],
+        cat_indices: Optional[List[int]] = None,
+        cat_dims: Optional[List[int]] = None,
         learning_rate: float = 1e-2,
         p_masking: float = 0.3,
         alpha: float = 2.0,
@@ -39,9 +41,12 @@ class VIMESelf(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.vime_self = VIMESelfNetwork(in_features_list, out_features_list)
+        self.vime_self = VIMESelfNetwork(input_dim, hidden_dims)
+        self.cat_indices = cat_indices
+        self.cat_dims = cat_dims
         self.random_state = check_random_state(seed)
-        self.feature_criterion = nn.MSELoss()
+        self.continuous_feature_criterion = nn.MSELoss()
+        self.categorical_feature_criterion = nn.MSELoss()
         self.mask_criterion = nn.BCEWithLogitsLoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
@@ -132,8 +137,8 @@ class VIMESemi(pl.LightningModule):
     def __init__(
         self,
         pretrained_encoder: nn.Module,
-        in_features_list: List[int],
-        out_features_list: List[int],
+        input_dim: int,
+        hidden_dims: List[int],
         num_classes: int,
         supervised_criterion: Callable[[Tensor, Tensor], Tensor],
         learning_rate: float = 5e-3,
@@ -146,7 +151,7 @@ class VIMESemi(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.vime_semi = VIMESemiNetwork(pretrained_encoder, in_features_list, out_features_list, num_classes)
+        self.vime_semi = VIMESemiNetwork(pretrained_encoder, input_dim, hidden_dims, num_classes)
         self.random_state = check_random_state(seed)
         self.supervised_criterion = supervised_criterion
         self.consistency_criterion = ConsistencyLoss()
@@ -228,9 +233,9 @@ class VIMESemi(pl.LightningModule):
 
 
 class MLPClassifier(pl.LightningModule):
-    def __init__(self, dim: int, hidden_dim: int, num_classes: int) -> None:
+    def __init__(self, input_dim: int, hidden_dim: int, num_classes: int) -> None:
         super().__init__()
-        self.mlp_classifier = MLP(dim, hidden_dim, num_classes)
+        self.mlp_classifier = MLP(input_dim, hidden_dim, num_classes)
         task = "binary" if num_classes == 1 else "multiclass"
         if task == "binary":
             self.criterion = nn.BCEWithLogitsLoss()
