@@ -146,7 +146,7 @@ class EmbeddingGenerator(nn.Module):
         self,
         cat_indices: Sequence[int],
         cat_dims: Sequence[int],
-        cat_embedding_dim: Union[Sequence[int], int],
+        cat_embedding_dim: int = Union[Sequence[int], int],
     ) -> Tuple[Sequence[int], Sequence[int], Sequence[int]]:
         if bool(cat_indices) ^ bool(cat_dims):
             if cat_indices:
@@ -156,7 +156,7 @@ class EmbeddingGenerator(nn.Module):
             raise ValueError(message)
         if len(cat_indices) != len(cat_dims):
             raise ValueError("cat_indices and cat_dims must have the same length.")
-        if isinstance(int, cat_embedding_dim):
+        if isinstance(cat_embedding_dim, int):
             cat_embedding_dims = [cat_embedding_dim] * len(cat_indices)
         else:
             cat_embedding_dims = cat_embedding_dim
