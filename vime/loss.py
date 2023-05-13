@@ -4,14 +4,13 @@ from torch import Tensor
 
 
 class CELoss(nn.Module):
-    def __init__(self, eps: float = 1e-8) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.eps = eps
         self.nll_loss = nn.NLLLoss()
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        input = torch.clamp_(input, self.eps, 1 - self.eps)
         input = torch.log(input)
+        input = torch.clamp(input, -100)  # Improve numerical stability.
         loss = self.nll_loss(input, target)
         return loss
 
