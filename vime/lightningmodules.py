@@ -48,12 +48,12 @@ class VIMESelf(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.vime_self = VIMESelfNetwork(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
-        self.cont_indices = self.vime_self.encoder.embedder.cont_indices
-        self.cat_indices = self.vime_self.encoder.embedder.cat_indices
-        self.cat_dims = [0] + self.vime_self.encoder.embedder.cat_dims
-        self.cat_embedding_dims = self.vime_self.encoder.embedder.cat_embedding_dims
-        self.total_cat_dim = self.vime_self.encoder.embedder.total_cat_dim
+        self.net = VIMESelfNetwork(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
+        self.cont_indices = self.net.encoder.embedder.cont_indices
+        self.cat_indices = self.net.encoder.embedder.cat_indices
+        self.cat_dims = [0] + self.net.encoder.embedder.cat_dims
+        self.cat_embedding_dims = self.net.encoder.embedder.cat_embedding_dims
+        self.total_cat_dim = self.net.encoder.embedder.total_cat_dim
         self.start_indices = np.cumsum(self.cat_dims)[:-1]
         self.end_indices = np.cumsum(self.cat_dims)[1:]
         self.random_state = check_random_state(seed)
@@ -64,7 +64,7 @@ class VIMESelf(pl.LightningModule):
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.vime_self(x)
+        return self.net(x)
 
     def on_before_batch_transfer(self, batch: Tensor, dataloader_idx: int) -> Tuple[Tensor, Tensor, Tensor]:
         x = batch
@@ -146,7 +146,7 @@ class VIMESelf(pl.LightningModule):
 
     @property
     def encoder(self) -> nn.Module:
-        return self.vime_self.encoder
+        return self.net.encoder
 
 
 class VIMESemi(pl.LightningModule):
@@ -183,7 +183,7 @@ class VIMESemi(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.vime_semi = VIMESemiNetwork(pretrained_encoder, input_dim, hidden_dims, num_classes)
+        self.net = VIMESemiNetwork(pretrained_encoder, input_dim, hidden_dims, num_classes)
         self.random_state = check_random_state(seed)
         self.supervised_criterion = supervised_criterion
         self.consistency_criterion = ConsistencyLoss()
@@ -191,7 +191,7 @@ class VIMESemi(pl.LightningModule):
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.vime_semi(x)
+        return self.net(x)
 
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         if self.trainer.training:
@@ -205,7 +205,7 @@ class VIMESemi(pl.LightningModule):
         return batch
 
     def on_train_epoch_start(self) -> None:
-        self.vime_semi.freeze_encoder()
+        self.net.freeze_encoder()
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         x_labeled, y = batch["labeled"]
@@ -259,7 +259,7 @@ class VIMESemi(pl.LightningModule):
         )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
-        optimizer = optim.AdamW(self.vime_semi.predictor.parameters(), lr=self.hparams.learning_rate)
+        optimizer = optim.AdamW(self.net.predictor.parameters(), lr=self.hparams.learning_rate)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
 
