@@ -53,7 +53,7 @@ class VIMESelf(pl.LightningModule):
         self.cat_indices = self.vime_self.encoder.embedder.cat_indices
         self.cat_dims = [0] + self.vime_self.encoder.embedder.cat_dims
         self.cat_embedding_dims = self.vime_self.encoder.embedder.cat_embedding_dims
-        self.total_cat_dim = self.vime_self.encoder.embedder.total_cat_dims
+        self.total_cat_dim = self.vime_self.encoder.embedder.total_cat_dim
         self.start_indices = np.cumsum(self.cat_dims)[:-1]
         self.end_indices = np.cumsum(self.cat_dims)[1:]
         self.random_state = check_random_state(seed)
