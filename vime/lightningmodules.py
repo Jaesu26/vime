@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import numpy as np
@@ -9,7 +9,7 @@ from sklearn.utils import check_random_state
 from torch import Tensor
 from torchmetrics import Accuracy
 
-from .loss import ConsistencyLoss
+from .losses import CELoss, ConsistencyLoss
 from .models import MLP, VIMESelfNetwork, VIMESemiNetwork
 from .utils import mask_generator, pretext_generator
 
@@ -21,7 +21,7 @@ class VIMESelf(pl.LightningModule):
         input_dim: The number of features.
         hidden_dims: The number of features each hidden layer.
         cat_indices: The positional index for each categorical features.
-        cat_dims: The number of modalities for each categorical features.
+        cat_dims: The number of unique values for each categorical features.
             If the list is empty, no embeddings will be done.
         cat_embedding_dim: The embedding dimension for each categorical features.
             If int, the same embedding dimension will be used for all categorical features.
@@ -36,9 +36,9 @@ class VIMESelf(pl.LightningModule):
         self,
         input_dim: int,
         hidden_dims: List[int],
-        cat_indices: Sequence[int] = (),
-        cat_dims: Sequence[int] = (),
-        cat_embedding_dim: Union[Sequence[int], int] = 2,
+        cat_indices: Optional[List[int]] = None,
+        cat_dims: Optional[List[int]] = None,
+        cat_embedding_dim: Union[int, List[int]] = 2,
         learning_rate: float = 1e-2,
         p_masking: float = 0.3,
         alpha: float = 2.0,
@@ -49,15 +49,17 @@ class VIMESelf(pl.LightningModule):
         pl.seed_everything(seed)
         self.save_hyperparameters()
         self.vime_self = VIMESelfNetwork(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
-        self.cont_indices = self.vime_self.encoder.embeddings.cont_indices
-        self.cat_indices = self.vime_self.encoder.embeddings.cat_indices
-        self.cat_dims = self.vime_self.encoder.embeddings.cat_dims
-        self.cat_embedding_dims = self.vime_self.encoder.embeddings.cat_embedding_dims
-        self.total_cat_dim = self.vime_self.encoder.embeddings.cat_dims
+        self.cont_indices = self.vime_self.encoder.embedder.cont_indices
+        self.cat_indices = self.vime_self.encoder.embedder.cat_indices
+        self.cat_dims = [0] + self.vime_self.encoder.embedder.cat_dims
+        self.cat_embedding_dims = self.vime_self.encoder.embedder.cat_embedding_dims
+        self.total_cat_dim = self.vime_self.encoder.embedder.total_cat_dims
+        self.start_indices = np.cumsum(self.cat_dims)[:-1]
+        self.end_indices = np.cumsum(self.cat_dims)[1:]
         self.random_state = check_random_state(seed)
         self.continuous_feature_criterion = nn.MSELoss()
-        self.categorical_feature_criterion = nn.CrossEntropyLoss()
-        self.mask_criterion = nn.BCEWithLogitsLoss()
+        self.categorical_feature_criterion = CELoss()
+        self.mask_criterion = nn.BCELoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
 
@@ -65,32 +67,39 @@ class VIMESelf(pl.LightningModule):
         return self.vime_self(x)
 
     def on_before_batch_transfer(self, batch: Tensor, dataloader_idx: int) -> Tuple[Tensor, Tensor, Tensor]:
-        X = batch
-        mask = mask_generator(self.hparams.p_masking, X.shape, self.random_state)
-        X_tilde, mask = pretext_generator(X, mask, self.random_state)
-        batch = X, X_tilde, mask
+        x = batch
+        mask = mask_generator(self.hparams.p_masking, x.shape, self.random_state)
+        x_tilde, mask = pretext_generator(x, mask, self.random_state)
+        batch = x, x_tilde, mask
         return batch
 
     def _shared_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        X, X_tilde, mask = batch
-        X_hat, mask_hat = self(X_tilde)
-        mask_vector_estimation_loss = self.mask_criterion(mask_hat, mask)
-        X_continuous = X[:, self.cont_indices]
-        X_hat_continuous = X_hat[:, : -self.total_cat_dim]
-        X_hat_categorical = X_hat[:, -self.total_cat_dim :]
-        Xs_categorical_hat = [X_hat_categorical[:, : self.cat_dims[0]]]
-        Xs_categorical_hat += [
-            X_hat_categorical[:, start_index:end_index]
-            for start_index, end_index in zip(np.cumsum(self.cat_dims)[:-1], np.cumsum(self.cat_dims)[1:])
-        ]
-        reconstruction_loss_cat = 0.0
-        for cat_index, X_hat_cat in zip(self.cat_indices, Xs_categorical_hat):
-            loss = self.categorical_feature_criterion(X_hat_cat, X[:, cat_index].long())
-            reconstruction_loss_cat += loss
-        reconstruction_loss_cont = self.continuous_feature_criterion(X_hat_continuous, X_continuous)
-        reconstruction_loss = reconstruction_loss_cont + reconstruction_loss_cat
+        x, x_tilde, mask = batch
+        x_hat, mask_hat = self(x_tilde)
+        loss, l_m, l_r = self.compute_loss(x_hat, x, mask_hat, mask)
+        return {"loss": loss, "l_m": l_m, "l_r": l_r}
+
+    def compute_loss(self, x_hat: Tensor, x: Tensor, mask_hat: Tensor, mask: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        mask_vector_estimation_loss = self._compute_mask_loss(mask_hat, mask)
+        reconstruction_loss = self._compute_reconstruction_loss(x_hat, x)
         loss = mask_vector_estimation_loss + self.hparams.alpha * reconstruction_loss
-        return {"loss": loss, "l_m": mask_vector_estimation_loss, "l_r": reconstruction_loss}
+        return loss, mask_vector_estimation_loss, reconstruction_loss
+
+    def _compute_mask_loss(self, mask_hat: Tensor, mask: Tensor) -> Tensor:
+        return self.mask_criterion(mask_hat, mask)
+
+    def _compute_reconstruction_loss(self, x_hat: Tensor, x: Tensor) -> Tensor:
+        x_continuous = x[:, self.cont_indices]
+        x_hat_continuous = x_hat[:, self.total_cat_dim:]
+        reconstruction_loss_continuous = self.continuous_feature_criterion(x_hat_continuous, x_continuous)
+        reconstruction_loss_categorical = 0.0
+        for cat_index, start_index, end_index in zip(self.cat_indices, self.start_indices, self.end_indices):
+            x_categorical = x[:, cat_index]
+            x_hat_categorical = x_hat[:, start_index:end_index]
+            loss = self.categorical_feature_criterion(x_hat_categorical, x_categorical)
+            reconstruction_loss_categorical += loss
+        reconstruction_loss = reconstruction_loss_continuous + reconstruction_loss_categorical
+        return reconstruction_loss
 
     def training_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         output = self._shared_step(batch, batch_idx)
@@ -186,23 +195,23 @@ class VIMESemi(pl.LightningModule):
 
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         if self.trainer.training:
-            X_unlabeled = batch["unlabeled"]
-            X_augmented = []
+            x_unlabeled = batch["unlabeled"]
+            x_augmented = []
             for _ in range(self.hparams.K):
-                mask = mask_generator(self.hparams.p_masking, X_unlabeled.shape, self.random_state)
-                X_tilde, _ = pretext_generator(X_unlabeled, mask, self.random_state)
-                X_augmented.append(X_tilde)
-            batch["unlabeled"] = torch.stack(X_augmented)  # Shape: (K, B, C)
+                mask = mask_generator(self.hparams.p_masking, x_unlabeled.shape, self.random_state)
+                x_tilde, _ = pretext_generator(x_unlabeled, mask, self.random_state)
+                x_augmented.append(x_tilde)
+            batch["unlabeled"] = torch.stack(x_augmented)  # Shape: (K, B, C)
         return batch
 
     def on_train_epoch_start(self) -> None:
         self.vime_semi.freeze_encoder()
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        X_labeled, y = batch["labeled"]
-        X_augmented = batch["unlabeled"]
-        y_hat_from_original = self(X_labeled)
-        y_hat_from_corruption = self(X_augmented)
+        x_labeled, y = batch["labeled"]
+        x_augmented = batch["unlabeled"]
+        y_hat_from_original = self(x_labeled)
+        y_hat_from_corruption = self(x_augmented)
         supervised_loss = self.supervised_criterion(y_hat_from_original, y)
         consistency_loss = self.consistency_criterion(y_hat_from_corruption)
         loss = supervised_loss + self.hparams.beta * consistency_loss
@@ -223,8 +232,8 @@ class VIMESemi(pl.LightningModule):
             )
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
-        X, y = batch
-        y_hat = self(X)
+        x, y = batch
+        y_hat = self(x)
         supervised_loss = self.supervised_criterion(y_hat, y)
         output = {"loss_s": supervised_loss}
         self.validation_step_outputs.append(output)
@@ -237,8 +246,8 @@ class VIMESemi(pl.LightningModule):
             print(f"Val Loss_s: {mean_loss_s:.4f}")
 
     def predict_step(self, batch: Tensor, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
-        X = batch
-        y_hat = self(X)
+        x = batch
+        y_hat = self(x)
         return y_hat
 
     @property
@@ -271,8 +280,8 @@ class MLPClassifier(pl.LightningModule):
         return y_hat
 
     def _shared_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        X, y = batch
-        y_hat = self(X)
+        x, y = batch
+        y_hat = self(x)
         loss = self.criterion(y_hat, y)
         return {"loss": loss, "y_hat": y_hat, "y": y}
 

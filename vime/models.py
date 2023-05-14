@@ -1,4 +1,4 @@
-from typing import List, Sequence, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class InitializerMixin:
+class WeightsInitializerMixin:
     def _init_weights(self: nn.Module) -> None:
         for m in self.modules():
             if isinstance(m, nn.Linear):
@@ -22,15 +22,17 @@ class VIMESelfNetwork(nn.Module):
         self,
         input_dim: int,
         hidden_dims: List[int],
-        cat_indices: Sequence[int] = (),
-        cat_dims: Sequence[int] = (),
-        cat_embedding_dim: Union[Sequence[int], int] = 2,
+        cat_indices: Optional[List[int]] = None,
+        cat_dims: Optional[List[int]] = None,
+        cat_embedding_dim: Union[int, List[int]] = 2,
     ) -> None:
         super().__init__()
         self._encoder = Encoder(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
-        representation_dim = hidden_dims[-1] + self._encoder.embeddings.last_additional_dim
-        self.feature_vector_estimator = nn.Linear(representation_dim, representation_dim)
-        self.mask_vector_estimator = nn.Linear(representation_dim, input_dim)
+        representation_dim = hidden_dims[-1]
+        total_dim_after_ohe = self._encoder.embedder.total_dim_after_ohe
+        cat_dims = self._encoder.embedder.cat_dims
+        self.feature_vector_estimator = FeatureVectorEstimator(representation_dim, total_dim_after_ohe, cat_dims)
+        self.mask_vector_estimator = MaskVectorEstimator(representation_dim, input_dim)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         z = self._encoder(x)
@@ -43,28 +45,55 @@ class VIMESelfNetwork(nn.Module):
         return self._encoder
 
 
-class Encoder(nn.Module, InitializerMixin):
+class Encoder(nn.Module, WeightsInitializerMixin):
     def __init__(
         self,
         input_dim: int,
         hidden_dims: List[int],
-        cat_indices: Sequence[int] = (),
-        cat_dims: Sequence[int] = (),
-        cat_embedding_dim: Union[Sequence[int], int] = 2,
+        cat_indices: Optional[List[int]] = None,
+        cat_dims: Optional[List[int]] = None,
+        cat_embedding_dim: Union[int, List[int]] = 2,
     ) -> None:
         super().__init__()
-        self.embeddings = EmbeddingGenerator(input_dim, cat_indices, cat_dims, cat_embedding_dim)
-        input_dim = input_dim if self.embeddings.skip_embedding else self.embeddings.post_embedding_dim
-        representation_dim = hidden_dims[-1] + self.embeddings.last_additional_dim
+        self.embedder = EmbeddingGenerator(input_dim, cat_indices, cat_dims, cat_embedding_dim)
+        input_dim = self.embedder.post_embedding_dim
         in_dims = [input_dim] + hidden_dims[:-1]
-        out_dims = hidden_dims[:-1] + [representation_dim]
+        out_dims = hidden_dims
         self.encoder = nn.Sequential(*[get_block(in_dim, out_dim) for in_dim, out_dim in zip(in_dims, out_dims)])
         self._init_weights()
 
     def forward(self, x: Tensor) -> Tensor:
-        x_embedded = self.embeddings(x)
+        x_embedded = self.embedder(x)
         z = self.encoder(x_embedded)
         return z
+
+
+class MaskVectorEstimator(nn.Module):
+    def __init__(self, representation_dim: int, mask_dim: int) -> None:
+        super().__init__()
+        self.fc = nn.Linear(representation_dim, mask_dim)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: Tensor) -> Tensor:
+        mask_logit = self.fc(x)
+        mask_hat = self.sigmoid(mask_logit)
+        return mask_hat
+
+
+class FeatureVectorEstimator(nn.Module):
+    def __init__(self, representation_dim: int, total_dim_after_ohe: int, cat_dims: List[int]) -> None:
+        super().__init__()
+        self.fc = nn.Linear(representation_dim, total_dim_after_ohe)
+        self.softmax = nn.Softmax(dim=1)
+        self.cat_dims = [0] + cat_dims
+        self.start_indices = np.cumsum(self.cat_dims)[:-1]
+        self.end_indices = np.cumsum(self.cat_dims)[1:]
+
+    def forward(self, x: Tensor) -> Tensor:
+        x_hat = self.fc(x)
+        for start_index, end_index in zip(self.start_indices, self.end_indices):
+            x_hat[:, start_index:end_index] = self.softmax(x_hat[:, start_index:end_index])
+        return x_hat
 
 
 def get_block(in_dim: int, out_dim: int) -> nn.Sequential:
@@ -100,7 +129,7 @@ class EmbeddingGenerator(nn.Module):
     Args:
         input_dim: The number of features.
         cat_indices: The positional index for each categorical feature.
-        cat_dims: The number of modalities for each categorical feature.
+        cat_dims: The number of unique values for each categorical features.
             If the list is empty, no embeddings will be done.
         cat_embedding_dim: The embedding dimension for each categorical feature.
             If int, the same embedding dimension will be used for all categorical features.
@@ -112,21 +141,26 @@ class EmbeddingGenerator(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        cat_indices: Sequence[int] = (),
-        cat_dims: Sequence[int] = (),
-        cat_embedding_dim: Union[Sequence[int], int] = 2,
+        cat_indices: Optional[List[int]] = None,
+        cat_dims: Optional[List[int]] = None,
+        cat_embedding_dim: Union[int, List[int]] = 2,
     ) -> None:
         super().__init__()
-        self.cat_indices, self.cat_dims, self.cat_embedding_dims = self._verify_params(
+        cat_indices = cat_indices or []
+        cat_dims = cat_dims or []
+        self.cat_indices, self.cat_dims, self.cat_embedding_dims = self._check_embedding_params(
             cat_indices, cat_dims, cat_embedding_dim
         )
-        self.num_cats = len(self.cat_indices)
-        self.total_cat_dim = sum(self.cat_dims)
         self.cont_indices = np.delete(range(input_dim), self.cat_indices)
-        self.skip_embedding = True if self.num_cats else False
-        self.post_embedding_dim = input_dim + sum(self.cat_embedding_dims) - self.num_cats
-        self.last_additional_dim = self.total_cat_dim - self.num_cats
-        self._sort_indices_for_seed()
+        self.total_cat_dim = sum(self.cat_dims)
+        self.num_categories = len(self.cat_indices)
+        if self.num_categories:
+            self.skip_embedding = True
+            self.post_embedding_dim = input_dim
+            return
+        self.skip_embedding = False
+        self.post_embedding_dim = input_dim + sum(self.cat_embedding_dims) - self.num_categories
+        self.total_dim_after_ohe = self.input_dim + self.total_cat_dim - self.num_categories
         self.embeddings = nn.ModuleList(
             [
                 nn.Embedding(cat_dim, cat_embedding_dim)
@@ -137,17 +171,17 @@ class EmbeddingGenerator(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         if self.skip_embedding:
             return x
+        xs_categorical_embedded = [emb(x[:, cat_index]) for cat_index, emb in zip(self.cat_indices, self.embeddings)]
         x_continuous = x[:, self.cont_indices]
-        cats_embedded = [embedding(x[:, cat_index]) for cat_index, embedding in zip(self.cat_indices, self.embeddings)]
-        x_embedded = torch.cat((x_continuous, *cats_embedded), dim=1)
+        x_embedded = torch.cat((*xs_categorical_embedded, x_continuous), dim=1)
         return x_embedded
 
-    def _verify_params(
+    def _check_embedding_params(
         self,
-        cat_indices: Sequence[int],
-        cat_dims: Sequence[int],
-        cat_embedding_dim: int = Union[Sequence[int], int],
-    ) -> Tuple[Sequence[int], Sequence[int], Sequence[int]]:
+        cat_indices: List[int],
+        cat_dims: List[int],
+        cat_embedding_dim: int = Union[int, List[int]],
+    ) -> Tuple[List[int], List[int], List[int]]:
         if bool(cat_indices) ^ bool(cat_dims):
             if cat_indices:
                 message = "If cat_indices is non-empty, cat_dims must be defined as a list of same length."
@@ -165,15 +199,13 @@ class EmbeddingGenerator(nn.Module):
                 "cat_embedding_dims and cat_dims must have the same length. "
                 f"Got: {len(cat_embedding_dims)} and {len(cat_dims)}"
             )
+        # Rearrange to get reproducible seeds with different ordering
+        if not cat_indices:
+            sorted_indices = np.argsort(cat_indices)
+            cat_indices.sort()
+            cat_dims = [cat_dims[index] for index in sorted_indices]
+            cat_embedding_dims = [cat_embedding_dims[index] for index in sorted_indices]
         return cat_indices, cat_dims, cat_embedding_dims
-
-    def _sort_indices_for_seed(self) -> None:
-        if not self.num_cats:
-            return
-        sorted_indices = np.argsort(self.cat_indices)
-        self.cat_indices = sorted(self.cat_indices)
-        self.cat_dims = [self.cat_dims[i] for i in sorted_indices]
-        self.cat_embedding_dims = [self.cat_embedding_dims[i] for i in sorted_indices]
 
 
 class VIMESemiNetwork(nn.Module):
@@ -201,7 +233,7 @@ class VIMESemiNetwork(nn.Module):
         self.pretrained_encoder.eval()
 
 
-class Predictor(nn.Module, InitializerMixin):
+class Predictor(nn.Module, WeightsInitializerMixin):
     def __init__(self, input_dim: int, hidden_dims: List[int], num_classes: int) -> None:
         super().__init__()
         in_dims = [input_dim] + hidden_dims[:-1]
@@ -216,7 +248,7 @@ class Predictor(nn.Module, InitializerMixin):
         return y_hat
 
 
-class MLP(nn.Module, InitializerMixin):
+class MLP(nn.Module, WeightsInitializerMixin):
     def __init__(self, input_dim: int, hidden_dim: int, num_classes: int) -> None:
         super().__init__()
         self.mlp = get_block(input_dim, hidden_dim)

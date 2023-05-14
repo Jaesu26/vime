@@ -18,14 +18,14 @@ def mask_generator(
 
 
 def pretext_generator(
-    X: Tensor,
+    x: Tensor,
     mask: Tensor,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
 ) -> Tuple[Tensor, Tensor]:
     random_state = check_random_state(random_state)
-    X_bar = X.numpy().copy()
-    np.apply_along_axis(func1d=random_state.shuffle, axis=0, arr=X_bar)
-    X_bar = torch.from_numpy(X_bar)
-    X_tilde = X * (1 - mask) + X_bar * mask  # Corrupts samples(=X)
-    corruption_mask = X.ne(X_tilde).float()
-    return X_tilde, corruption_mask
+    x_bar = x.numpy().copy()
+    np.apply_along_axis(func1d=random_state.shuffle, axis=0, arr=x_bar)
+    x_bar = torch.from_numpy(x_bar)
+    x_tilde = x * (1 - mask) + x_bar * mask  # Corrupts samples(=x)
+    corruption_mask = x.ne(x_tilde).float()
+    return x_tilde, corruption_mask
