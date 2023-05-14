@@ -160,7 +160,7 @@ class EmbeddingGenerator(nn.Module):
             return
         self.skip_embedding = False
         self.post_embedding_dim = input_dim + sum(self.cat_embedding_dims) - self.num_categories
-        self.total_dim_after_ohe = self.input_dim + self.total_cat_dim - self.num_categories
+        self.total_dim_after_ohe = input_dim + self.total_cat_dim - self.num_categories
         self.embeddings = nn.ModuleList(
             [
                 nn.Embedding(cat_dim, cat_embedding_dim)
