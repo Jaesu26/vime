@@ -6,17 +6,6 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class WeightsInitializerMixin:
-    def _init_weights(self: nn.Module) -> None:
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight)
-                nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.BatchNorm1d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
-
-
 class VIMESelfNetwork(nn.Module):
     def __init__(
         self,
@@ -45,7 +34,7 @@ class VIMESelfNetwork(nn.Module):
         return self._encoder
 
 
-class Encoder(nn.Module, WeightsInitializerMixin):
+class Encoder(nn.Module):
     def __init__(
         self,
         input_dim: int,
@@ -60,7 +49,6 @@ class Encoder(nn.Module, WeightsInitializerMixin):
         in_dims = [input_dim] + hidden_dims[:-1]
         out_dims = hidden_dims
         self.encoder = nn.Sequential(*[get_block(in_dim, out_dim) for in_dim, out_dim in zip(in_dims, out_dims)])
-        self._init_weights()
 
     def forward(self, x: Tensor) -> Tensor:
         x_embedded = self.embedder(x)
@@ -85,9 +73,9 @@ class FeatureVectorEstimator(nn.Module):
         super().__init__()
         self.fc = nn.Linear(representation_dim, total_dim_after_ohe)
         self.softmax = nn.Softmax(dim=1)
-        self.cat_dims = [0] + cat_dims
-        self.start_indices = np.cumsum(self.cat_dims)[:-1]
-        self.end_indices = np.cumsum(self.cat_dims)[1:]
+        cat_dims = [0] + cat_dims
+        self.start_indices = np.cumsum(cat_dims)[:-1]
+        self.end_indices = np.cumsum(cat_dims)[1:]
 
     def forward(self, x: Tensor) -> Tensor:
         x_hat = self.fc(x)
@@ -233,14 +221,13 @@ class VIMESemiNetwork(nn.Module):
         self.pretrained_encoder.eval()
 
 
-class Predictor(nn.Module, WeightsInitializerMixin):
+class Predictor(nn.Module):
     def __init__(self, input_dim: int, hidden_dims: List[int], num_classes: int) -> None:
         super().__init__()
         in_dims = [input_dim] + hidden_dims[:-1]
         out_dims = hidden_dims
         self.fc = nn.Sequential(*[get_block(in_dim, out_dim) for in_dim, out_dim in zip(in_dims, out_dims)])
         self.classifier = nn.Linear(out_dims[-1], num_classes)
-        self._init_weights()
 
     def forward(self, z: Tensor) -> Tensor:
         z = self.fc(z)
@@ -248,12 +235,11 @@ class Predictor(nn.Module, WeightsInitializerMixin):
         return y_hat
 
 
-class MLP(nn.Module, WeightsInitializerMixin):
+class MLP(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int, num_classes: int) -> None:
         super().__init__()
         self.mlp = get_block(input_dim, hidden_dim)
         self.fc = nn.Linear(hidden_dim, num_classes)
-        self._init_weights()
 
     def forward(self, x: Tensor) -> Tensor:
         z = self.mlp(x)
