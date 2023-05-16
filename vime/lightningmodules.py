@@ -155,7 +155,6 @@ class VIMESemi(pl.LightningModule):
 
     Args:
         pretrained_encoder: The pretrained encoder.
-        input_dim: The number of features.
         hidden_dims: The number of features each hidden layer.
         num_classes: The number of classes.
         supervised_criterion: The supervised loss function (i.g. torch.nn.CrossEntropyLoss()).
@@ -170,7 +169,6 @@ class VIMESemi(pl.LightningModule):
     def __init__(
         self,
         pretrained_encoder: nn.Module,
-        input_dim: int,
         hidden_dims: List[int],
         num_classes: int,
         supervised_criterion: Callable[[Tensor, Tensor], Tensor],
@@ -184,7 +182,7 @@ class VIMESemi(pl.LightningModule):
         super().__init__()
         pl.seed_everything(seed)
         self.save_hyperparameters()
-        self.net = VIMESemiNetwork(pretrained_encoder, input_dim, hidden_dims, num_classes)
+        self.net = VIMESemiNetwork(pretrained_encoder, hidden_dims, num_classes)
         self.random_state = check_random_state(seed)
         self.supervised_criterion = supervised_criterion
         self.consistency_criterion = ConsistencyLoss()
