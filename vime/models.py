@@ -20,7 +20,7 @@ class VIMESelfNetwork(nn.Module):
         representation_dim = hidden_dims[-1]
         total_dim_after_ohe = self._encoder.embedder.total_dim_after_ohe
         cat_dims = self._encoder.embedder.cat_dims
-        self.feature_vector_estimator = FeatureVectorEstimator(representation_dim, cat_dims, total_dim_after_ohe)
+        self.feature_vector_estimator = FeatureVectorEstimator(representation_dim, total_dim_after_ohe, cat_dims)
         self.mask_vector_estimator = MaskVectorEstimator(representation_dim, input_dim)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
