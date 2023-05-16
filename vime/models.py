@@ -212,12 +212,14 @@ class VIMESemiNetwork(nn.Module):
         self.freeze_encoder()
 
     def _extract_output_dim(self, pretrained_encoder: nn.Module) -> int:
-        children = list(pretrained_encoder.children())[::-1]
-        for child in children:
+        for child in pretrained_encoder.children():
             if not isinstance(child, nn.Linear):
                 continue
-            return child.out_features
-        raise ValueError("pretrained_encoder must have linear layer.")
+            out_features = child.out_features
+        try:
+            return out_features
+        except NameError as e:
+            raise AttributeError("pretrained_encoder must have linear layer.") from e
 
     def forward(self, x: Tensor) -> Tensor:
         with torch.no_grad():
