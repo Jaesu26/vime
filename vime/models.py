@@ -190,7 +190,7 @@ class EmbeddingGenerator(nn.Module):
         # Rearrange to get reproducible seeds with different ordering
         if cat_indices:
             sorted_indices = np.argsort(cat_indices)
-            cat_indices.sort()
+            cat_indices = sorted(cat_indices)
             cat_dims = [cat_dims[index] for index in sorted_indices]
             cat_embedding_dims = [cat_embedding_dims[index] for index in sorted_indices]
         return cat_indices, cat_dims, cat_embedding_dims
