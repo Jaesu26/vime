@@ -188,7 +188,7 @@ class EmbeddingGenerator(nn.Module):
                 f"Got: {len(cat_embedding_dims)} and {len(cat_dims)}"
             )
         # Rearrange to get reproducible seeds with different ordering
-        if not cat_indices:
+        if cat_indices:
             sorted_indices = np.argsort(cat_indices)
             cat_indices.sort()
             cat_dims = [cat_dims[index] for index in sorted_indices]
