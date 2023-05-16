@@ -51,11 +51,12 @@ class VIMESelf(pl.LightningModule):
         self.net = VIMESelfNetwork(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
         self.cont_indices = self.net.encoder.embedder.cont_indices
         self.cat_indices = self.net.encoder.embedder.cat_indices
-        self.cat_dims = [0] + self.net.encoder.embedder.cat_dims
+        self.cat_dims = self.net.encoder.embedder.cat_dims
+        cat_dims = [0] + self.cat_dims
         self.cat_embedding_dims = self.net.encoder.embedder.cat_embedding_dims
         self.total_cat_dim = self.net.encoder.embedder.total_cat_dim
-        self.start_indices = np.cumsum(self.cat_dims)[:-1]
-        self.end_indices = np.cumsum(self.cat_dims)[1:]
+        self.start_indices = np.cumsum(cat_dims)[:-1]
+        self.end_indices = np.cumsum(cat_dims)[1:]
         self.random_state = check_random_state(seed)
         self.continuous_feature_criterion = nn.MSELoss()
         self.categorical_feature_criterion = CELoss()
