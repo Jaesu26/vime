@@ -159,7 +159,7 @@ class EmbeddingGenerator(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         if self.skip_embedding:
             return x
-        xs_categorical_embedded = [emb(x[..., cat_index]) for cat_index, emb in zip(self.cat_indices, self.embeddings)]
+        xs_categorical_embedded = [emb(x[..., index].long()) for index, emb in zip(self.cat_indices, self.embeddings)]
         x_continuous = x[..., self.cont_indices]
         x_embedded = torch.cat((*xs_categorical_embedded, x_continuous), dim=-1)
         return x_embedded
