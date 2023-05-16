@@ -142,7 +142,7 @@ class EmbeddingGenerator(nn.Module):
         self.cont_indices = np.delete(range(input_dim), self.cat_indices)
         self.total_cat_dim = sum(self.cat_dims)
         self.num_categories = len(self.cat_indices)
-        if self.num_categories:
+        if not self.num_categories:
             self.skip_embedding = True
             self.post_embedding_dim = input_dim
             return

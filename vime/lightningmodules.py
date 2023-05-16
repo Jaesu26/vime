@@ -94,7 +94,7 @@ class VIMESelf(pl.LightningModule):
         reconstruction_loss_continuous = self.continuous_feature_criterion(x_hat_continuous, x_continuous)
         reconstruction_loss_categorical = 0.0
         for cat_index, start_index, end_index in zip(self.cat_indices, self.start_indices, self.end_indices):
-            x_categorical = x[:, cat_index]
+            x_categorical = x[:, cat_index].long()
             x_hat_categorical = x_hat[:, start_index:end_index]
             loss = self.categorical_feature_criterion(x_hat_categorical, x_categorical)
             reconstruction_loss_categorical += loss
@@ -160,7 +160,7 @@ class VIMESemi(pl.LightningModule):
         supervised_criterion: The supervised loss function (i.g. torch.nn.CrossEntropyLoss()).
         learning_rate: The learning rate for the optimizer.
         p_masking: The probability of masking a feature.
-        K: The number of augmented samples.
+        K: The number of unlabeled augmentations.
         beta: The hyperparameter to control the weights of supervised loss and consistency loss.
         log_interval: The logging frequency.
         seed: The random seed for reproducibility.
