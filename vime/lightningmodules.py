@@ -264,9 +264,17 @@ class VIMESemi(pl.LightningModule):
 
 
 class MLPClassifier(pl.LightningModule):
-    def __init__(self, input_dim: int, hidden_dim: int, num_classes: int) -> None:
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        num_classes: int,
+        cat_indices: Optional[List[int]] = None,
+        cat_dims: Optional[List[int]] = None,
+        cat_embedding_dim: Union[int, List[int]] = 2,
+    ) -> None:
         super().__init__()
-        self.mlp_classifier = MLP(input_dim, hidden_dim, num_classes)
+        self.mlp_classifier = MLP(input_dim, hidden_dims, num_classes, cat_indices, cat_dims, cat_embedding_dim)
         task = "binary" if num_classes == 1 else "multiclass"
         if task == "binary":
             self.criterion = nn.BCEWithLogitsLoss()

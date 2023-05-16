@@ -248,12 +248,20 @@ class Predictor(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int, num_classes: int) -> None:
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        num_classes: int,
+        cat_indices: Optional[List[int]] = None,
+        cat_dims: Optional[List[int]] = None,
+        cat_embedding_dim: Union[int, List[int]] = 2,
+    ) -> None:
         super().__init__()
-        self.fc = get_block(input_dim, hidden_dim)
-        self.head = nn.Linear(hidden_dim, num_classes)
+        self.fc = Encoder(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
+        self.head = nn.Linear(hidden_dims[-1], num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
-        z = self.mlp(x)
+        z = self.fc(x)
         y_hat = self.head(z)
         return y_hat
