@@ -193,6 +193,12 @@ class VIMESemi(pl.LightningModule):
     def forward(self, x: Tensor) -> Tensor:
         return self.net(x)
 
+    def on_fit_start(self) -> None:
+        self.net.freeze_encoder()
+
+    def on_train_epoch_start(self) -> None:
+        self.net.pretrained_encoder.eval()
+
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         if self.trainer.training:
             x_unlabeled = batch["unlabeled"]
@@ -203,9 +209,6 @@ class VIMESemi(pl.LightningModule):
                 x_augmented.append(x_tilde)
             batch["unlabeled"] = torch.stack(x_augmented)  # Shape: (K, B, C)
         return batch
-
-    def on_train_epoch_start(self) -> None:
-        self.net.freeze_encoder()
 
     def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         x_labeled, y = batch["labeled"]
