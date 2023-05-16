@@ -62,14 +62,14 @@ class MaskVectorEstimator(nn.Module):
         self.fc = nn.Linear(representation_dim, mask_dim)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x: Tensor) -> Tensor:
-        mask_logit = self.fc(x)
+    def forward(self, z: Tensor) -> Tensor:
+        mask_logit = self.fc(z)
         mask_hat = self.sigmoid(mask_logit)
         return mask_hat
 
 
 class FeatureVectorEstimator(nn.Module):
-    def __init__(self, representation_dim: int, cat_dims: List[int], total_dim_after_ohe: int) -> None:
+    def __init__(self, representation_dim: int, total_dim_after_ohe: int, cat_dims: List[int]) -> None:
         super().__init__()
         self.fc = nn.Linear(representation_dim, total_dim_after_ohe)
         self.softmax = nn.Softmax(dim=-1)
@@ -77,8 +77,8 @@ class FeatureVectorEstimator(nn.Module):
         self.start_indices = np.cumsum(cat_dims)[:-1]
         self.end_indices = np.cumsum(cat_dims)[1:]
 
-    def forward(self, x: Tensor) -> Tensor:
-        x_hat = self.fc(x)
+    def forward(self, z: Tensor) -> Tensor:
+        x_hat = self.fc(z)
         for start_index, end_index in zip(self.start_indices, self.end_indices):
             x_hat[..., start_index:end_index] = self.softmax(x_hat[..., start_index:end_index])
         return x_hat
@@ -142,13 +142,13 @@ class EmbeddingGenerator(nn.Module):
         self.cont_indices = np.delete(range(input_dim), self.cat_indices)
         self.total_cat_dim = sum(self.cat_dims)
         self.num_cat_features = len(self.cat_indices)
+        self.total_dim_after_ohe = input_dim + self.total_cat_dim - self.num_cat_features
         if not self.num_cat_features:
             self.skip_embedding = True
             self.post_embedding_dim = input_dim
             return
         self.skip_embedding = False
         self.post_embedding_dim = input_dim + sum(self.cat_embedding_dims) - self.num_cat_features
-        self.total_dim_after_ohe = input_dim + self.total_cat_dim - self.num_cat_features
         self.embeddings = nn.ModuleList(
             [
                 nn.Embedding(cat_dim, cat_embedding_dim)
@@ -202,12 +202,12 @@ class VIMESemiNetwork(nn.Module):
     def __init__(
         self,
         pretrained_encoder: nn.Module,
-        input_dim: int,
         hidden_dims: List[int],
         num_classes: int,
     ) -> None:
         super().__init__()
         self.pretrained_encoder = pretrained_encoder
+        input_dim = 1
         self.predictor = Predictor(input_dim, hidden_dims, num_classes)
         self.freeze_encoder()
 
