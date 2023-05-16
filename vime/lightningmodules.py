@@ -52,9 +52,10 @@ class VIMESelf(pl.LightningModule):
         self.cont_indices = self.net.encoder.embedder.cont_indices
         self.cat_indices = self.net.encoder.embedder.cat_indices
         self.cat_dims = self.net.encoder.embedder.cat_dims
-        cat_dims = [0] + self.cat_dims
         self.cat_embedding_dims = self.net.encoder.embedder.cat_embedding_dims
         self.total_cat_dim = self.net.encoder.embedder.total_cat_dim
+        self.weight = self.net.encoder.embedder.num_cat_features / input_dim
+        cat_dims = [0] + self.cat_dims
         self.start_indices = np.cumsum(cat_dims)[:-1]
         self.end_indices = np.cumsum(cat_dims)[1:]
         self.random_state = check_random_state(seed)
@@ -77,10 +78,10 @@ class VIMESelf(pl.LightningModule):
     def _shared_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         x, x_tilde, mask = batch
         x_hat, mask_hat = self(x_tilde)
-        loss, l_m, l_r = self.compute_loss(x_hat, x, mask_hat, mask)
+        loss, l_m, l_r = self.compute_loss(mask_hat, mask, x_hat, x)
         return {"loss": loss, "l_m": l_m, "l_r": l_r}
 
-    def compute_loss(self, x_hat: Tensor, x: Tensor, mask_hat: Tensor, mask: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def compute_loss(self, mask_hat: Tensor, mask: Tensor, x_hat: Tensor, x: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         mask_vector_estimation_loss = self._compute_mask_loss(mask_hat, mask)
         reconstruction_loss = self._compute_reconstruction_loss(x_hat, x)
         loss = mask_vector_estimation_loss + self.hparams.alpha * reconstruction_loss
@@ -92,14 +93,14 @@ class VIMESelf(pl.LightningModule):
     def _compute_reconstruction_loss(self, x_hat: Tensor, x: Tensor) -> Tensor:
         x_continuous = x[:, self.cont_indices]
         x_hat_continuous = x_hat[:, self.total_cat_dim:]
-        reconstruction_loss_continuous = self.continuous_feature_criterion(x_hat_continuous, x_continuous)
-        reconstruction_loss_categorical = 0.0
+        reconstruction_loss_cont = self.continuous_feature_criterion(x_hat_continuous, x_continuous)
+        reconstruction_loss_cat = 0.0
         for cat_index, start_index, end_index in zip(self.cat_indices, self.start_indices, self.end_indices):
             x_categorical = x[:, cat_index].long()
             x_hat_categorical = x_hat[:, start_index:end_index]
             loss = self.categorical_feature_criterion(x_hat_categorical, x_categorical)
-            reconstruction_loss_categorical += loss
-        reconstruction_loss = reconstruction_loss_continuous + reconstruction_loss_categorical
+            reconstruction_loss_cat += loss / self.num_cat_features
+        reconstruction_loss = (1 - self.weight) * reconstruction_loss_cont + self.weight * reconstruction_loss_cat
         return reconstruction_loss
 
     def training_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:

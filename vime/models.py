@@ -258,10 +258,10 @@ class MLP(nn.Module):
         cat_embedding_dim: Union[int, List[int]] = 2,
     ) -> None:
         super().__init__()
-        self.fc = Encoder(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
+        self.encoder = Encoder(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
         self.head = nn.Linear(hidden_dims[-1], num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
-        z = self.fc(x)
+        z = self.encoder(x)
         y_hat = self.head(z)
         return y_hat
