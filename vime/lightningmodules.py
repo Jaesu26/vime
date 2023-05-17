@@ -69,10 +69,16 @@ class VIMESelf(pl.LightningModule):
         return self.net(x)
 
     def on_before_batch_transfer(self, batch: Tensor, dataloader_idx: int) -> Tuple[Tensor, Tensor, Tensor]:
-        x = batch
-        mask = mask_generator(self.hparams.p_masking, x.shape, self.random_state)
-        x_tilde, mask = pretext_generator(x, mask, self.random_state)
-        batch = x, x_tilde, mask
+        if self.trainer.training:
+            x = batch
+            mask = mask_generator(self.hparams.p_masking, x.shape, self.random_state)
+            x_tilde, mask = pretext_generator(x, mask, self.random_state)
+            batch = x, x_tilde, mask
+        elif self.trainer.validating:
+            x = batch
+            mask = torch.zeros_like(x)
+            x_tilde = x
+            batch = x, x_tilde, mask
         return batch
 
     def _shared_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
@@ -320,6 +326,11 @@ class MLPClassifier(pl.LightningModule):
         self.macro_accuracy.reset()
         if self.should_log:
             print(f"Val Loss: {mean_loss:.4f} | Val Macro Acc: {macro_acc:.4f}")
+
+    def predict_step(self, batch: Tensor, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
+        x = batch
+        y_hat = self(x)
+        return y_hat
 
     @property
     def should_log(self):
