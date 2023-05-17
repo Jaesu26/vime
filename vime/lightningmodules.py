@@ -147,7 +147,7 @@ class VIMESelf(pl.LightningModule):
             )
 
     @property
-    def should_log(self):
+    def should_log(self) -> bool:
         return (
             self.current_epoch == 0
             or (self.current_epoch + 1) % self.hparams.log_interval == 0
@@ -267,7 +267,7 @@ class VIMESemi(pl.LightningModule):
         return y_hat
 
     @property
-    def should_log(self):
+    def should_log(self) -> bool:
         return (
             self.current_epoch == 0
             or (self.current_epoch + 1) % self.hparams.log_interval == 0
@@ -344,7 +344,7 @@ class MLPClassifier(pl.LightningModule):
         return y_hat
 
     @property
-    def should_log(self):
+    def should_log(self) -> bool:
         return (
             self.current_epoch == 0
             or (self.current_epoch + 1) % self.hparams.log_interval == 0
