@@ -136,7 +136,7 @@ class VIMESelf(pl.LightningModule):
         mean_loss_m = torch.stack([output["l_m"] for output in self.validation_step_outputs]).mean()
         mean_loss_r = torch.stack([output["l_r"] for output in self.validation_step_outputs]).mean()
         self.validation_step_outputs.clear()
-        self.log_dict({"val_loss": mean_loss})
+        self.log("val_loss", mean_loss)
         if self.should_log:
             print(f"Val Loss: {mean_loss:.4f} | Val Loss_m: {mean_loss_m:.4f} | Val Loss_r: {mean_loss_r:.4f}")
 
@@ -251,7 +251,7 @@ class VIMESemi(pl.LightningModule):
     def on_validation_epoch_end(self) -> None:
         mean_loss_s = torch.stack([output["loss_s"] for output in self.validation_step_outputs]).mean()
         self.validation_step_outputs.clear()
-        self.log_dict({"val_loss": mean_loss_s})
+        self.log("val_loss", mean_loss_s)
         if self.should_log:
             print(f"Val Loss_s: {mean_loss_s:.4f}")
 
