@@ -1,3 +1,4 @@
-from .lightningmodules import MLPClassifier, VIMESelf, VIMESemi
+from .datamodules import VIMESelfDataModule, VIMESemiDataModule
+from .lightningmodules import VIMESelf, VIMESemi
 
-__all__ = ["MLPClassifier", "VIMESelf", "VIMESemi"]
+__all__ = ["VIMESelf", "VIMESelfDataModule", "VIMESemi", "VIMESemiDataModule"]
