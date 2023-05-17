@@ -75,6 +75,7 @@ class VIMESelf(pl.LightningModule):
             x_tilde, mask = pretext_generator(x, mask, self.random_state)
             batch = x, x_tilde, mask
         elif self.trainer.validating:
+            # Do not transform validation data for non-stochastic validation.
             x = batch
             mask = torch.zeros_like(x)
             x_tilde = x
