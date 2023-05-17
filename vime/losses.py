@@ -10,7 +10,7 @@ class CELoss(nn.Module):
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
         input = torch.log(input)
-        input = torch.clamp(input, -100)  # Improve numerical stability.
+        input = torch.clamp(input, -100)  # Improve numerical stability
         loss = self.nll_loss(input, target)
         return loss
 

@@ -115,11 +115,11 @@ class EmbeddingGenerator(nn.Module):
     """Classical embedding generator.
 
     Args:
-        input_dim: The number of features.
-        cat_indices: The positional index for each categorical feature.
+        input_dim: Number of features.
+        cat_indices: Categorical features indices.
             If the list is empty, no embeddings will be done.
-        cat_dims: The number of unique values for each categorical features.
-        cat_embedding_dim: The embedding dimension for each categorical feature.
+        cat_dims: Number of unique values for each categorical feature.
+        cat_embedding_dim: Embedding dimension for each categorical feature.
             If int, the same embedding dimension will be used for all categorical features.
 
     References:

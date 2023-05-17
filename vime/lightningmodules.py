@@ -15,21 +15,21 @@ from .utils import mask_generator, pretext_generator
 
 
 class VIMESelf(pl.LightningModule):
-    """The VIME for self-supervised learning.
+    """VIME for self-supervised learning.
 
     Args:
-        input_dim: The number of features.
-        hidden_dims: The number of features each hidden layer.
-        cat_indices: The positional index for each categorical features.
-        cat_dims: The number of unique values for each categorical features.
+        input_dim: Number of features.
+        hidden_dims: Number of features each hidden state.
+        cat_indices: Categorical features indices.
             If the list is empty, no embeddings will be done.
-        cat_embedding_dim: The embedding dimension for each categorical features.
+        cat_dims: Number of unique values for each categorical feature.
+        cat_embedding_dim: Embedding dimension for each categorical feature.
             If int, the same embedding dimension will be used for all categorical features.
-        learning_rate: The learning rate for the optimizer.
-        p_masking: The probability of masking a feature.
-        alpha: The hyperparameter to control the weights of mask vector estimation loss and reconstruction loss.
-        log_interval: The logging frequency.
-        seed: The random seed for reproducibility.
+        lr: Learning rate for the optimizer.
+        p_masking: Probability of masking a feature.
+        alpha: Hyperparameter to control weights of mask vector estimation loss and reconstruction loss.
+        log_interval: Logging frequency.
+        seed: Random seed for reproducibility.
     """
 
     def __init__(
@@ -39,7 +39,7 @@ class VIMESelf(pl.LightningModule):
         cat_indices: Optional[List[int]] = None,
         cat_dims: Optional[List[int]] = None,
         cat_embedding_dim: Union[int, List[int]] = 2,
-        learning_rate: float = 1e-2,
+        lr: float = 1e-2,
         p_masking: float = 0.3,
         alpha: float = 2.0,
         log_interval: int = 10,
@@ -64,6 +64,9 @@ class VIMESelf(pl.LightningModule):
         self.mask_criterion = nn.BCELoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
+        self.mean_loss = None
+        self.mean_loss_m = None
+        self.mean_loss_r = None
 
     def forward(self, x: Tensor) -> Tensor:
         return self.net(x)
@@ -75,7 +78,7 @@ class VIMESelf(pl.LightningModule):
             x_tilde, mask = pretext_generator(x, mask, self.random_state)
             batch = x, x_tilde, mask
         elif self.trainer.validating:
-            # Do not transform validation data for non-stochastic validation.
+            # Do not transform validation data for non-stochastic validation
             x = batch
             mask = torch.zeros_like(x)
             x_tilde = x
@@ -115,15 +118,18 @@ class VIMESelf(pl.LightningModule):
         self.training_step_outputs.append(output)
         return output
 
+    def _on_shared_epoch_end(self, outputs: List[Dict[str, Tensor]]) -> None:
+        self.mean_loss = torch.stack([output["loss"] for output in outputs]).mean()
+        self.mean_loss_m = torch.stack([output["l_m"] for output in outputs]).mean()
+        self.mean_loss_r = torch.stack([output["l_r"] for output in outputs]).mean()
+        outputs.clear()
+
     def on_train_epoch_end(self) -> None:
-        mean_loss = torch.stack([output["loss"] for output in self.training_step_outputs]).mean()
-        mean_loss_m = torch.stack([output["l_m"] for output in self.training_step_outputs]).mean()
-        mean_loss_r = torch.stack([output["l_r"] for output in self.training_step_outputs]).mean()
-        self.training_step_outputs.clear()
+        self._on_shared_epoch_end(self.training_step_outputs)
         if self.should_log:
             print(
-                f"Epoch {self.current_epoch + 1} | Train Loss: {mean_loss:.4f}"
-                f" | Train Loss_m: {mean_loss_m:.4f} | Train Loss_r: {mean_loss_r:.4f}",
+                f"Epoch {self.current_epoch + 1} | Train Loss: {self.mean_loss:.4f}"
+                f" | Train Loss_m: {self.mean_loss_m:.4f} | Train Loss_r: {self.mean_loss_r:.4f}",
                 end=" " * 2,
             )
 
@@ -132,13 +138,13 @@ class VIMESelf(pl.LightningModule):
         self.validation_step_outputs.append(output)
 
     def on_validation_epoch_end(self) -> None:
-        mean_loss = torch.stack([output["loss"] for output in self.validation_step_outputs]).mean()
-        mean_loss_m = torch.stack([output["l_m"] for output in self.validation_step_outputs]).mean()
-        mean_loss_r = torch.stack([output["l_r"] for output in self.validation_step_outputs]).mean()
-        self.validation_step_outputs.clear()
-        self.log("val_loss", mean_loss)
+        self._on_shared_epoch_end(self.validation_step_outputs)
+        self.log("val_loss", self.mean_loss)
         if self.should_log:
-            print(f"Val Loss: {mean_loss:.4f} | Val Loss_m: {mean_loss_m:.4f} | Val Loss_r: {mean_loss_r:.4f}")
+            print(
+                f"Val Loss: {self.mean_loss:.4f} | Val Loss_m: {self.mean_loss_m:.4f}"
+                f" | Val Loss_r: {self.mean_loss_r:.4f}"
+            )
 
     @property
     def should_log(self):
@@ -149,7 +155,7 @@ class VIMESelf(pl.LightningModule):
         )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
-        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.lr)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
 
@@ -159,19 +165,19 @@ class VIMESelf(pl.LightningModule):
 
 
 class VIMESemi(pl.LightningModule):
-    """The VIME for semi-supervised learning.
+    """VIME for semi-supervised learning.
 
     Args:
-        pretrained_encoder: The pretrained encoder.
-        hidden_dims: The number of features each hidden layer.
-        num_classes: The number of classes.
-        supervised_criterion: The supervised loss function (i.g. torch.nn.CrossEntropyLoss()).
-        learning_rate: The learning rate for the optimizer.
-        p_masking: The probability of masking a feature.
-        K: The number of unlabeled augmentations.
-        beta: The hyperparameter to control the weights of supervised loss and consistency loss.
-        log_interval: The logging frequency.
-        seed: The random seed for reproducibility.
+        pretrained_encoder: Pretrained encoder.
+        hidden_dims: Number of features each hidden state.
+        num_classes: Number of classes.
+        supervised_criterion: Supervised loss function (i.g. torch.nn.CrossEntropyLoss()).
+        lr: Learning rate for the optimizer.
+        p_masking: Probability of masking a feature.
+        K: Number of unlabeled augmentations.
+        beta: Hyperparameter to control weights of supervised loss and consistency loss.
+        log_interval: Logging frequency.
+        seed: Random seed for reproducibility.
     """
 
     def __init__(
@@ -180,7 +186,7 @@ class VIMESemi(pl.LightningModule):
         hidden_dims: List[int],
         num_classes: int,
         supervised_criterion: Callable[[Tensor, Tensor], Tensor],
-        learning_rate: float = 5e-3,
+        lr: float = 5e-3,
         p_masking: float = 0.3,
         K: int = 3,
         beta: float = 1.0,
@@ -269,7 +275,7 @@ class VIMESemi(pl.LightningModule):
         )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
-        optimizer = optim.AdamW(self.net.predictor.parameters(), lr=self.hparams.learning_rate)
+        optimizer = optim.AdamW(self.net.predictor.parameters(), lr=self.hparams.lr)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
 
@@ -283,10 +289,12 @@ class MLPClassifier(pl.LightningModule):
         cat_indices: Optional[List[int]] = None,
         cat_dims: Optional[List[int]] = None,
         cat_embedding_dim: Union[int, List[int]] = 2,
+        lr: float = 1e-3,
         seed: int = 26,
     ) -> None:
         super().__init__()
         pl.seed_everything(seed)
+        self.save_hyperparameters()
         self.mlp_classifier = MLP(input_dim, hidden_dims, num_classes, cat_indices, cat_dims, cat_embedding_dim)
         task = "binary" if num_classes == 1 else "multiclass"
         if task == "binary":
@@ -318,14 +326,14 @@ class MLPClassifier(pl.LightningModule):
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
         output = self._shared_step(batch, batch_idx)
-        self.macro_accuracy.update(output["y_hat"], output["y"])
         self.validation_step_outputs.append(output)
+        self.macro_accuracy.update(output["y_hat"], output["y"])
 
     def on_validation_epoch_end(self) -> None:
         mean_loss = torch.stack([output["loss"] for output in self.validation_step_outputs]).mean()
         macro_acc = self.macro_accuracy.compute()
-        self.validation_step_outputs.clear()
         self.log_dict({"val_loss": mean_loss, "val_macro_acc": macro_acc})
+        self.validation_step_outputs.clear()
         self.macro_accuracy.reset()
         if self.should_log:
             print(f"Val Loss: {mean_loss:.4f} | Val Macro Acc: {macro_acc:.4f}")
@@ -344,6 +352,6 @@ class MLPClassifier(pl.LightningModule):
         )
 
     def configure_optimizers(self) -> Tuple[List[optim.Optimizer], List[optim.lr_scheduler.LRScheduler]]:
-        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.lr)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]
