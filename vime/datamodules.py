@@ -84,3 +84,40 @@ class VIMESemiDataModule(pl.LightningDataModule):
 
     def predict_dataloader(self) -> DataLoader:
         return DataLoader(self.predict_dataset, batch_size=self.hparams.unlabeled_batch_size, shuffle=False)
+
+
+class LabeledDataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        X_predict: np.ndarray,
+        train_size: float = 0.9,
+        batch_size: int = 512,
+        seed: int = 26,
+    ) -> None:
+        super().__init__()
+        self.save_hyperparameters()
+        self.X = X
+        self.y = y
+        self.X_predict = X_predict
+        self.train_dataset = None
+        self.val_dataset = None
+        self.predict_dataset = None
+
+    def setup(self, stage: str) -> None:
+        X_train, X_val, y_train, y_val = train_test_split(
+            self.X, self.y, train_size=self.hparams.train_size, random_state=self.hparams.seed, stratify=self.y
+        )
+        self.train_dataset = LabeledDataset(X_train, y_train)
+        self.val_dataset = LabeledDataset(X_val, y_val)
+        self.predict_dataset = UnlabeledDataset(self.X_predict)
+
+    def train_dataloader(self) -> DataLoader:
+        return DataLoader(self.train_dataset, batch_size=self.hparams.batch_size, shuffle=True)
+
+    def val_dataloader(self) -> DataLoader:
+        return DataLoader(self.val_dataset, batch_size=self.hparams.batch_size, shuffle=False)
+
+    def predict_dataloader(self) -> DataLoader:
+        return DataLoader(self.predict_dataset, batch_size=self.hparams.batch_size, shuffle=False)
