@@ -102,7 +102,7 @@ class VIMESelf(pl.LightningModule):
 
     def _compute_reconstruction_loss(self, x_hat: Tensor, x: Tensor) -> Tensor:
         x_continuous = x[:, self.cont_indices]
-        x_hat_continuous = x_hat[:, self.total_cat_dim:]
+        x_hat_continuous = x_hat[:, self.total_cat_dim :]
         reconstruction_loss_cont = self.continuous_feature_criterion(x_hat_continuous, x_continuous)
         reconstruction_loss_cat = 0.0
         for cat_index, start_index, end_index in zip(self.cat_indices, self.start_indices, self.end_indices):
