@@ -102,7 +102,7 @@ class LabeledDataModule(pl.LightningDataModule):
         super().__init__()
         assert X.shape[1] == X_predict.shape[1]
         self.save_hyperparameters(ignore=["X", "y", "X_predict"])
-        self.X = check_array(X, input_name="X")
+        self.X, y = check_X_y(X, y)
         self.y = check_y_dtype(y)
         self.X_predict = check_array(X_predict, input_name="X_predict")
         self.train_dataset = None
