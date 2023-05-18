@@ -6,6 +6,18 @@ from sklearn.utils import check_random_state
 from torch import Tensor
 
 
+def check_y_dtype(y: np.ndarray) -> np.ndarray:
+    classes = np.unique(y)
+    num_classes = len(classes)
+    is_classification = np.array_equal(classes, np.arange(num_classes))
+    is_multiclass = is_classification and num_classes >= 3
+    if is_multiclass:
+        y = y.astype(np.int64)
+    else:
+        y = y.astype(np.float32)
+    return y
+
+
 def mask_generator(
     p_masking: float,
     size: Tuple[int, ...],

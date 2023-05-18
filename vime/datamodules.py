@@ -2,9 +2,11 @@ import lightning.pytorch as pl
 import numpy as np
 from lightning.pytorch.utilities.combined_loader import CombinedLoader
 from sklearn.model_selection import train_test_split
+from sklearn.utils import check_array, check_X_y
 from torch.utils.data import DataLoader
 
 from .datasets import LabeledDataset, UnlabeledDataset
+from .utils import check_y_dtype
 
 
 class VIMESelfDataModule(pl.LightningDataModule):
@@ -16,8 +18,8 @@ class VIMESelfDataModule(pl.LightningDataModule):
         seed: int = 26,
     ) -> None:
         super().__init__()
-        self.save_hyperparameters()
-        self.X = X
+        self.save_hyperparameters(ignore="X")
+        self.X = check_array(X, input_name="X")
         self.train_dataset = None
         self.val_dataset = None
 
@@ -46,11 +48,12 @@ class VIMESemiDataModule(pl.LightningDataModule):
         seed: int = 26,
     ) -> None:
         super().__init__()
-        self.save_hyperparameters()
-        self.X_unlabeled = X_unlabeled
-        self.X_labeled = X_labeled
-        self.y = y
-        self.X_predict = X_predict
+        assert X_unlabeled.shape[1] == X_labeled.shape[1] == X_predict.shape[1]
+        self.save_hyperparameters(ignore=["X_unlabeled", "X_labeled", "y", "X_predict"])
+        self.X_unlabeled = check_array(X_unlabeled, input_name="X_unlabeled")
+        self.X_labeled, y = check_X_y(X_labeled, y)
+        self.y = check_y_dtype(y)
+        self.X_predict = check_array(X_predict, input_name="X_predict")
         self.train_unlabeled_dataset = None
         self.train_labeled_dataset = None
         self.val_labeled_dataset = None
@@ -97,10 +100,11 @@ class LabeledDataModule(pl.LightningDataModule):
         seed: int = 26,
     ) -> None:
         super().__init__()
-        self.save_hyperparameters()
-        self.X = X
-        self.y = y
-        self.X_predict = X_predict
+        assert X.shape[1] == X_predict.shape[1]
+        self.save_hyperparameters(ignore=["X", "y", "X_predict"])
+        self.X = check_array(X, input_name="X")
+        self.y = check_y_dtype(y)
+        self.X_predict = check_array(X_predict, input_name="X_predict")
         self.train_dataset = None
         self.val_dataset = None
         self.predict_dataset = None

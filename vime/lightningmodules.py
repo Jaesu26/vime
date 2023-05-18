@@ -195,7 +195,7 @@ class VIMESemi(pl.LightningModule):
     ) -> None:
         super().__init__()
         pl.seed_everything(seed)
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore="pretrained_encoder")
         self.net = VIMESemiNetwork(pretrained_encoder, hidden_dims, num_classes)
         self.random_state = check_random_state(seed)
         self.supervised_criterion = supervised_criterion
