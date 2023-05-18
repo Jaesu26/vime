@@ -17,8 +17,8 @@ def check_y_dtype(y: np.ndarray) -> np.ndarray:
     return y
 
 
-def check_rng(seed: Optional[Union[int, np.random, np.random.Generator]] = None) -> np.random.Generator:
-    if seed is None or seed is np.random:
+def check_rng(seed: Optional[Union[int, np.random.Generator]] = None) -> np.random.Generator:
+    if seed is None:
         return np.random.default_rng()
     if isinstance(seed, int):
         return np.random.default_rng(seed)
