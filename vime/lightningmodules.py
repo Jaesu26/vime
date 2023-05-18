@@ -5,13 +5,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.utils import check_random_state
 from torch import Tensor
 from torchmetrics import Accuracy
 
 from .losses import CELoss, ConsistencyLoss
 from .models import MLP, VIMESelfNetwork, VIMESemiNetwork
-from .utils import mask_generator, pretext_generator
+from .utils import check_rng, mask_generator, pretext_generator
 
 
 class VIMESelf(pl.LightningModule):
@@ -58,7 +57,7 @@ class VIMESelf(pl.LightningModule):
         cat_dims = [0] + self.cat_dims
         self.start_indices = np.cumsum(cat_dims)[:-1]
         self.end_indices = np.cumsum(cat_dims)[1:]
-        self.random_state = check_random_state(seed)
+        self.rng = check_rng(seed)
         self.continuous_feature_criterion = nn.MSELoss()
         self.categorical_feature_criterion = CELoss()
         self.mask_criterion = nn.BCELoss()
@@ -74,8 +73,8 @@ class VIMESelf(pl.LightningModule):
     def on_before_batch_transfer(self, batch: Tensor, dataloader_idx: int) -> Tuple[Tensor, Tensor, Tensor]:
         if self.trainer.training:
             x = batch
-            mask = mask_generator(self.hparams.p_masking, x.shape, self.random_state)
-            x_tilde, mask = pretext_generator(x, mask, self.random_state)
+            mask = mask_generator(self.hparams.p_masking, x.shape, self.rng)
+            x_tilde, mask = pretext_generator(x, mask, self.rng)
             batch = x, x_tilde, mask
         elif self.trainer.validating:
             # Do not transform validation data for non-stochastic validation
@@ -197,7 +196,7 @@ class VIMESemi(pl.LightningModule):
         pl.seed_everything(seed)
         self.save_hyperparameters(ignore="pretrained_encoder")
         self.net = VIMESemiNetwork(pretrained_encoder, hidden_dims, num_classes)
-        self.random_state = check_random_state(seed)
+        self.rng = check_rng(seed)
         self.supervised_criterion = supervised_criterion
         self.consistency_criterion = ConsistencyLoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
@@ -217,8 +216,8 @@ class VIMESemi(pl.LightningModule):
             x_unlabeled = batch["unlabeled"]
             x_augmented = []
             for _ in range(self.hparams.K):
-                mask = mask_generator(self.hparams.p_masking, x_unlabeled.shape, self.random_state)
-                x_tilde, _ = pretext_generator(x_unlabeled, mask, self.random_state)
+                mask = mask_generator(self.hparams.p_masking, x_unlabeled.shape, self.rng)
+                x_tilde, _ = pretext_generator(x_unlabeled, mask, self.rng)
                 x_augmented.append(x_tilde)
             batch["unlabeled"] = torch.stack(x_augmented)  # Shape: (K, B, C)
         return batch
