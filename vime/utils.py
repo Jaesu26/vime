@@ -5,6 +5,16 @@ import torch
 from torch import Tensor
 
 
+def check_rng(seed: Optional[Union[int, np.random.Generator]] = None) -> np.random.Generator:
+    if seed is None:
+        return np.random.default_rng()
+    if isinstance(seed, int):
+        return np.random.default_rng(seed)
+    if isinstance(seed, np.random.Generator):
+        return seed
+    raise ValueError(f"{seed} cannot be used to seed a numpy.random.default_rng function.")
+
+
 def check_y_dtype(y: np.ndarray) -> np.ndarray:
     classes = np.unique(y)
     num_classes = len(classes)
@@ -15,16 +25,6 @@ def check_y_dtype(y: np.ndarray) -> np.ndarray:
     else:
         y = y.astype(np.float32)
     return y
-
-
-def check_rng(seed: Optional[Union[int, np.random.Generator]] = None) -> np.random.Generator:
-    if seed is None:
-        return np.random.default_rng()
-    if isinstance(seed, int):
-        return np.random.default_rng(seed)
-    if isinstance(seed, np.random.Generator):
-        return seed
-    raise ValueError(f"{seed} cannot be used to seed a numpy.random.default_rng function.")
 
 
 def mask_generator(
