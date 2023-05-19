@@ -212,10 +212,10 @@ class VIMESemiNetwork(nn.Module):
         self.freeze_encoder()
 
     def _extract_output_dim(self, pretrained_encoder: nn.Module) -> int:
-        for child in pretrained_encoder.modules():
-            if not isinstance(child, nn.Linear):
+        for module in pretrained_encoder.modules():
+            if not isinstance(module, nn.Linear):
                 continue
-            out_features = child.out_features
+            out_features = module.out_features
         try:
             return out_features
         except NameError as e:
