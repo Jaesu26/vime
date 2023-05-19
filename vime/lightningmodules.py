@@ -301,6 +301,8 @@ class MLPClassifier(pl.LightningModule):
         else:
             self.criterion = nn.CrossEntropyLoss()
         self.macro_accuracy = Accuracy(task=task, num_classes=num_classes, average="macro")
+        self.training_step_outputs: List[Dict[str, Tensor]] = []
+        self.validation_step_outputs: List[Dict[str, Tensor]] = []
 
     def forward(self, x: Tensor) -> Tensor:
         y_hat = self.mlp_classifier(x)
