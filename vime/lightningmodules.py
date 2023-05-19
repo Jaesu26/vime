@@ -289,6 +289,7 @@ class MLPClassifier(pl.LightningModule):
         cat_dims: Optional[List[int]] = None,
         cat_embedding_dim: Union[int, List[int]] = 2,
         lr: float = 1e-3,
+        log_interval: int = 10,
         seed: int = 26,
     ) -> None:
         super().__init__()
