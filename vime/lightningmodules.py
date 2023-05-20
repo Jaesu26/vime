@@ -84,7 +84,7 @@ class VIMESelf(pl.LightningModule):
             batch = x, x_tilde, mask
         return batch
 
-    def _shared_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
+    def _shared_fit_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         x, x_tilde, mask = batch
         x_hat, mask_hat = self(x_tilde)
         loss, l_m, l_r = self.compute_loss(mask_hat, mask, x_hat, x)
@@ -113,18 +113,19 @@ class VIMESelf(pl.LightningModule):
         return reconstruction_loss
 
     def training_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        output = self._shared_step(batch, batch_idx)
+        output = self._shared_fit_step(batch, batch_idx)
         self.training_step_outputs.append(output)
         return output
 
-    def _on_shared_epoch_end(self, outputs: List[Dict[str, Tensor]]) -> None:
+    def _on_shared_fit_epoch_end(self) -> None:
+        outputs = self.training_step_outputs if self.trainer.training else self.validation_step_outputs
         self.mean_loss = torch.stack([output["loss"] for output in outputs]).mean()
         self.mean_loss_m = torch.stack([output["l_m"] for output in outputs]).mean()
         self.mean_loss_r = torch.stack([output["l_r"] for output in outputs]).mean()
         outputs.clear()
 
     def on_train_epoch_end(self) -> None:
-        self._on_shared_epoch_end(self.training_step_outputs)
+        self._on_shared_fit_epoch_end()
         if self.should_log:
             print(
                 f"Epoch {self.current_epoch + 1} | Train Loss: {self.mean_loss:.4f}"
@@ -133,11 +134,11 @@ class VIMESelf(pl.LightningModule):
             )
 
     def validation_step(self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int) -> None:
-        output = self._shared_step(batch, batch_idx)
+        output = self._shared_fit_step(batch, batch_idx)
         self.validation_step_outputs.append(output)
 
     def on_validation_epoch_end(self) -> None:
-        self._on_shared_epoch_end(self.validation_step_outputs)
+        self._on_shared_fit_epoch_end()
         self.log("val_loss", self.mean_loss)
         if self.should_log:
             print(
@@ -308,14 +309,14 @@ class MLPClassifier(pl.LightningModule):
     def forward(self, x: Tensor) -> Tensor:
         return self.net(x)
 
-    def _shared_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
+    def _shared_fit_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
         return {"loss": loss, "y_hat": y_hat, "y": y}
 
     def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        output = self._shared_step(batch, batch_idx)
+        output = self._shared_fit_step(batch, batch_idx)
         self.training_step_outputs.append(output)
         return output
 
@@ -326,7 +327,7 @@ class MLPClassifier(pl.LightningModule):
             print(f"Epoch {self.current_epoch + 1} | Train Loss: {mean_loss:.4f}", end=" " * 2)
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
-        output = self._shared_step(batch, batch_idx)
+        output = self._shared_fit_step(batch, batch_idx)
         self.validation_step_outputs.append(output)
         self.macro_accuracy.update(output["y_hat"], output["y"])
 
