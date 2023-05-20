@@ -207,7 +207,7 @@ class VIMESemiNetwork(nn.Module):
     ) -> None:
         super().__init__()
         self.pretrained_encoder = pretrained_encoder
-        input_dim = self._extract_output_dim()
+        input_dim = self._extract_encoder_output_dim()
         self.predictor = Predictor(input_dim, hidden_dims, num_classes)
         self.freeze_encoder()
 
