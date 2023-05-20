@@ -206,13 +206,13 @@ class VIMESemiNetwork(nn.Module):
         num_classes: int,
     ) -> None:
         super().__init__()
-        input_dim = self._extract_output_dim(pretrained_encoder)
         self.pretrained_encoder = pretrained_encoder
+        input_dim = self._extract_output_dim()
         self.predictor = Predictor(input_dim, hidden_dims, num_classes)
         self.freeze_encoder()
 
-    def _extract_output_dim(self, pretrained_encoder: nn.Module) -> int:
-        for module in pretrained_encoder.modules():
+    def _extract_encoder_output_dim(self) -> int:
+        for module in self.pretrained_encoder.modules():
             if not isinstance(module, nn.Linear):
                 continue
             out_features = module.out_features
