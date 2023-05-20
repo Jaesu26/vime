@@ -9,6 +9,6 @@ The official tensorflow implementation is [here](https://github.com/jsyoon0823/V
 pip install git+https://github.com/Jaesu26/vime.git
 ```
 
-## References
+## Reference
 
 - [VIME: Extending the Success of Self- and Semi-supervised Learning to Tabular Domain](https://vanderschaar-lab.com/papers/NeurIPS2020_VIME.pdf)
