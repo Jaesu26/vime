@@ -223,7 +223,7 @@ class VIMESemi(pl.LightningModule):
             batch["unlabeled"] = torch.stack(x_augmented)  # Shape: (K, B, C)
         return batch
 
-    def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Dict[str, Tensor]:
+    def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tensor:
         x_labeled, y = batch["labeled"]
         x_augmented = batch["unlabeled"]
         y_hat_from_original = self(x_labeled)
