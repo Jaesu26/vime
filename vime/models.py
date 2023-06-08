@@ -63,8 +63,8 @@ class MaskVectorEstimator(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, z: Tensor) -> Tensor:
-        mask_logit = self.fc(z)
-        mask_hat = self.sigmoid(mask_logit)
+        logit = self.fc(z)
+        mask_hat = self.sigmoid(logit)
         return mask_hat
 
 
@@ -224,8 +224,8 @@ class VIMESemiNetwork(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         with torch.no_grad():
             z = self.pretrained_encoder(x)
-        y_hat = self.predictor(z)
-        return y_hat
+        output = self.predictor(z)
+        return output
 
     def freeze_encoder(self) -> None:
         for param in self.pretrained_encoder.parameters():
@@ -243,8 +243,8 @@ class Predictor(nn.Module):
 
     def forward(self, z: Tensor) -> Tensor:
         z = self.fc(z)
-        y_hat = self.head(z)
-        return y_hat
+        output = self.head(z)
+        return output
 
 
 class MLP(nn.Module):
@@ -263,5 +263,5 @@ class MLP(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         z = self.encoder(x)
-        y_hat = self.head(z)
-        return y_hat
+        output = self.head(z)
+        return output
