@@ -262,9 +262,7 @@ class VIMESemi(pl.LightningModule):
             print(f"Val Loss_s: {mean_loss_s:.4f}")
 
     def predict_step(self, batch: Tensor, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
-        x = batch
-        y_hat = self(x)
-        return y_hat
+        return self(batch)
 
     @property
     def should_log(self) -> bool:
@@ -338,9 +336,7 @@ class MLPClassifier(pl.LightningModule):
             print(f"Val Loss: {mean_loss:.4f} | Val Macro Acc: {macro_acc:.4f}")
 
     def predict_step(self, batch: Tensor, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
-        x = batch
-        logit = self(x)
-        return logit
+        return self(batch)
 
     @property
     def should_log(self) -> bool:
