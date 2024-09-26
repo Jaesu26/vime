@@ -322,7 +322,10 @@ class MLPClassifier(pl.LightningModule):
             print(f"Epoch {self.current_epoch + 1} | Train Loss: {mean_loss:.4f}", end=" " * 2)
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> None:
-        output = self._shared_fit_step(batch, batch_idx)
+        x, y = batch
+        logit = self(x)
+        loss = self.criterion(logit, y)
+        output = {"loss": loss, "logit": logit, "y": y}
         self.validation_step_outputs.append(output)
         self.macro_accuracy.update(output["logit"], output["y"])
 
