@@ -9,7 +9,7 @@ profile = "black"
 py_version = 38
 
 [tool.mypy]
-allow_redefinition = true
 files = ["vime"]
+python_version = "3.8"
+allow_redefinition = true
 ignore_missing_imports = true
-python_version = 3.8
