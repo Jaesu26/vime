@@ -3,13 +3,16 @@ import numpy as np
 from lightning.pytorch.utilities.combined_loader import CombinedLoader
 from sklearn.model_selection import train_test_split
 from sklearn.utils import check_array, check_X_y
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from .datasets import LabeledDataset, UnlabeledDataset
-from .utils import check_y_dtype
+from vime.datasets import LabeledDataset, UnlabeledDataset
+from vime.utils import check_y_dtype
 
 
 class VIMESelfDataModule(pl.LightningDataModule):
+    train_dataset: Dataset
+    val_dataset: Dataset
+
     def __init__(
         self,
         X: np.ndarray,
@@ -20,8 +23,6 @@ class VIMESelfDataModule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters(ignore="X")
         self.X = check_array(X, input_name="X")
-        self.train_dataset = None
-        self.val_dataset = None
 
     def setup(self, stage: str) -> None:
         X_train, X_val = train_test_split(self.X, train_size=self.hparams.train_size, random_state=self.hparams.seed)
@@ -36,6 +37,11 @@ class VIMESelfDataModule(pl.LightningDataModule):
 
 
 class VIMESemiDataModule(pl.LightningDataModule):
+    train_unlabeled_dataset: Dataset
+    train_labeled_dataset: Dataset
+    val_labeled_dataset: Dataset
+    predict_dataset: Dataset
+
     def __init__(
         self,
         X_unlabeled: np.ndarray,
@@ -54,10 +60,6 @@ class VIMESemiDataModule(pl.LightningDataModule):
         self.X_labeled, y = check_X_y(X_labeled, y)
         self.y = check_y_dtype(y)
         self.X_predict = check_array(X_predict, input_name="X_predict")
-        self.train_unlabeled_dataset = None
-        self.train_labeled_dataset = None
-        self.val_labeled_dataset = None
-        self.predict_dataset = None
 
     def setup(self, stage: str) -> None:
         X_train, X_val, y_train, y_val = train_test_split(
@@ -90,6 +92,10 @@ class VIMESemiDataModule(pl.LightningDataModule):
 
 
 class LabeledDataModule(pl.LightningDataModule):
+    train_dataset: Dataset
+    val_dataset: Dataset
+    predict_dataset: Dataset
+
     def __init__(
         self,
         X: np.ndarray,
@@ -105,9 +111,6 @@ class LabeledDataModule(pl.LightningDataModule):
         self.X, y = check_X_y(X, y)
         self.y = check_y_dtype(y)
         self.X_predict = check_array(X_predict, input_name="X_predict")
-        self.train_dataset = None
-        self.val_dataset = None
-        self.predict_dataset = None
 
     def setup(self, stage: str) -> None:
         X_train, X_val, y_train, y_val = train_test_split(

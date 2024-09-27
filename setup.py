@@ -11,8 +11,8 @@ setup(
     url="https://github.com/Jaesu26/vime",
     packages=find_packages(exclude=["examples"]),
     license="MIT",
-    zip_safe=False,
     include_package_data=True,
+    zip_safe=False,
     install_requires=open("requirements.txt").read().splitlines(),
     python_requires=">=3.8",
 )

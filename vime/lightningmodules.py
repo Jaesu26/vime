@@ -8,9 +8,9 @@ import torch.optim as optim
 from torch import Tensor
 from torchmetrics import Accuracy
 
-from .losses import CELoss, ConsistencyLoss
-from .models import MLP, VIMESelfNetwork, VIMESemiNetwork
-from .utils import check_rng, mask_generator, pretext_generator
+from vime.losses import CELoss, ConsistencyLoss
+from vime.models import Encoder, MLP, VIMESelfNetwork, VIMESemiNetwork
+from vime.utils import check_rng, mask_generator, pretext_generator
 
 
 class VIMESelf(pl.LightningModule):
@@ -31,6 +31,10 @@ class VIMESelf(pl.LightningModule):
         seed: Random seed for reproducibility.
     """
 
+    mean_loss: Tensor
+    mean_loss_m: Tensor
+    mean_loss_r: Tensor
+
     def __init__(
         self,
         input_dim: int,
@@ -48,12 +52,13 @@ class VIMESelf(pl.LightningModule):
         pl.seed_everything(seed)
         self.save_hyperparameters()
         self.net = VIMESelfNetwork(input_dim, hidden_dims, cat_indices, cat_dims, cat_embedding_dim)
-        self.cont_indices = self.net.encoder.embedder.cont_indices
-        self.cat_indices = self.net.encoder.embedder.cat_indices
-        self.cat_dims = self.net.encoder.embedder.cat_dims
-        self.cat_embedding_dims = self.net.encoder.embedder.cat_embedding_dims
-        self.total_cat_dim = self.net.encoder.embedder.total_cat_dim
-        self.weight = self.net.encoder.embedder.num_cat_features / input_dim
+        embedder = self.net.encoder.embedder
+        self.cont_indices = embedder.cont_indices
+        self.cat_indices = embedder.cat_indices
+        self.cat_dims = embedder.cat_dims
+        self.cat_embedding_dims = embedder.cat_embedding_dims
+        self.total_cat_dim = embedder.total_cat_dim
+        self.weight = embedder.num_cat_features / input_dim
         cat_dims = [0] + self.cat_dims
         self.start_indices = np.cumsum(cat_dims)[:-1]
         self.end_indices = np.cumsum(cat_dims)[1:]
@@ -63,9 +68,6 @@ class VIMESelf(pl.LightningModule):
         self.mask_criterion = nn.BCELoss()
         self.training_step_outputs: List[Dict[str, Tensor]] = []
         self.validation_step_outputs: List[Dict[str, Tensor]] = []
-        self.mean_loss = None
-        self.mean_loss_m = None
-        self.mean_loss_r = None
 
     def forward(self, x: Tensor) -> Tensor:
         return self.net(x)
@@ -160,7 +162,7 @@ class VIMESelf(pl.LightningModule):
         return [optimizer], [scheduler]
 
     @property
-    def encoder(self) -> nn.Module:
+    def encoder(self) -> Encoder:
         return self.net.encoder
 
 

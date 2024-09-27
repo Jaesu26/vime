@@ -1,4 +1,4 @@
-from .datamodules import VIMESelfDataModule, VIMESemiDataModule
-from .lightningmodules import VIMESelf, VIMESemi
-
 __all__ = ["VIMESelf", "VIMESelfDataModule", "VIMESemi", "VIMESemiDataModule"]
+
+from vime.datamodules import VIMESelfDataModule, VIMESemiDataModule
+from vime.lightningmodules import VIMESelf, VIMESemi

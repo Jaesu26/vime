@@ -3,8 +3,10 @@ line-length = 120
 target-version = ["py38"]
 
 [tool.isort]
+classes = ["MLP"]
 line_length = 120
 profile = "black"
+py_version = 38
 
 [tool.mypy]
 files = ["vime"]

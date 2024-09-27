@@ -30,7 +30,7 @@ class VIMESelfNetwork(nn.Module):
         return x_hat, mask_hat
 
     @property
-    def encoder(self) -> nn.Module:
+    def encoder(self) -> "Encoder":
         return self._encoder
 
 
@@ -134,8 +134,8 @@ class EmbeddingGenerator(nn.Module):
         cat_embedding_dim: Union[int, List[int]] = 2,
     ) -> None:
         super().__init__()
-        cat_indices = cat_indices or []
-        cat_dims = cat_dims or []
+        cat_indices = cat_indices if cat_indices is not None else []
+        cat_dims = cat_dims if cat_dims is not None else []
         self.cat_indices, self.cat_dims, self.cat_embedding_dims = self._check_embedding_params(
             cat_indices, cat_dims, cat_embedding_dim
         )
@@ -168,7 +168,7 @@ class EmbeddingGenerator(nn.Module):
         self,
         cat_indices: List[int],
         cat_dims: List[int],
-        cat_embedding_dim: int = Union[int, List[int]],
+        cat_embedding_dim: Union[int, List[int]],
     ) -> Tuple[List[int], List[int], List[int]]:
         if bool(cat_indices) ^ bool(cat_dims):
             if cat_indices:
