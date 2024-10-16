@@ -44,6 +44,6 @@ def pretext_generator(
 ) -> Tuple[Tensor, Tensor]:
     x_bar = generator.permuted(x.numpy(), axis=0)
     x_bar = torch.from_numpy(x_bar)
-    x_tilde = x * (1 - mask) + x_bar * mask  # Corrupts samples(=x)
+    x_tilde = mask * x_bar + (1 - mask) * x  # Corrupts samples(=x)
     corruption_mask = x.ne(x_tilde).float()
     return x_tilde, corruption_mask
